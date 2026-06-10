@@ -62,6 +62,18 @@ def snapshot_bookmaker(conn) -> int:
                 rows.append((ts, "bookmaker_gateway", "bookmaker_eu", None,
                              g["event_label"], "h2h", sel["label"], None,
                              None, rp, fp, fm, tw.divergence_pts))
+            for t in g.get("totals", []):
+                rp_o = american_to_prob(t["over"])
+                rp_u = american_to_prob(t["under"])
+                f_o, f_u = devig_probs([rp_o, rp_u], "power")
+                m_o, m_u = devig_probs([rp_o, rp_u], "multiplicative")
+                div = round(max(abs(f_o - m_o), abs(f_u - m_u)) * 100, 3)
+                rows.append((ts, "bookmaker_gateway", "bookmaker_eu", None,
+                             g["event_label"], "totals", "Over", t["point"],
+                             None, rp_o, f_o, m_o, div))
+                rows.append((ts, "bookmaker_gateway", "bookmaker_eu", None,
+                             g["event_label"], "totals", "Under", t["point"],
+                             None, rp_u, f_u, m_u, div))
         else:
             probs = [american_to_prob(s["american"]) for s in g["selections"]]
             fair = devig_probs(probs, "power")

@@ -62,10 +62,19 @@ STAGE_MULTIPLIER = {
 
 
 def odds_api_key() -> str:
-    """Resolve the shared Odds API key without copying it into this repo."""
+    """Resolve the Odds API key without copying it into this repo.
+
+    Order: env var, ~/.odds_api_key (current free key, 2026-06-10),
+    then the tracker's api/.env (stale 401 key as of 2026-06-10).
+    """
     key = os.environ.get("ODDS_API_KEY", "")
     if key:
         return key
+    key_file = Path.home() / ".odds_api_key"
+    if key_file.exists():
+        key = key_file.read_text().strip()
+        if key:
+            return key
     if TRACKER_ENV.exists():
         for line in TRACKER_ENV.read_text().splitlines():
             line = line.strip()

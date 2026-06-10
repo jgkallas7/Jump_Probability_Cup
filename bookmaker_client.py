@@ -102,6 +102,7 @@ def parse_games(raw: dict) -> list[dict]:
                 kind = "futures"
                 event_label = str(game.get("gdesc", league_desc))
 
+                totals: list[dict] = []
                 if htm and vtm:
                     ml = next((l for l in lines if str(l.get("s_ml")) == "1"), None)
                     if ml:
@@ -116,6 +117,17 @@ def parse_games(raw: dict) -> list[dict]:
                             ]
                             kind = "match"
                             event_label = f"{vtm} vs {htm}"
+                    # Totals ladder: every line row carries one O/U quote
+                    # (ovt == unt per row, ladder spans ~1.5-3.0 goals).
+                    seen_pts = set()
+                    for l in lines:
+                        ovt = str(l.get("ovt", "")).strip()
+                        ov = str(l.get("ovoddst", "")).strip()
+                        un = str(l.get("unoddst", "")).strip()
+                        if ovt and ov and un and ovt not in seen_pts:
+                            seen_pts.add(ovt)
+                            totals.append({"point": float(ovt),
+                                           "over": ov, "under": un})
                 else:
                     for line in lines:
                         label = str(line.get("tmname", "")).strip()
@@ -123,7 +135,7 @@ def parse_games(raw: dict) -> list[dict]:
                         if label and odds:
                             selections.append({"label": label, "american": odds})
 
-                if not selections:
+                if not selections and not totals:
                     continue
                 out.append({
                     "league_id": league_id,
@@ -134,5 +146,6 @@ def parse_games(raw: dict) -> list[dict]:
                     "start_time": (str(game.get("gmdt", "")) + " "
                                    + str(game.get("gmtm", ""))).strip(),
                     "selections": selections,
+                    "totals": totals,
                 })
     return out

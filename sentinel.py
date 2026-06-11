@@ -50,8 +50,9 @@ def main() -> None:
     hours = SENTINEL_WINDOW_MIN / 60 + 0.25
     snapshot.snapshot_pinnacle(conn, hours=hours)
     submit.cmd_revise(conn, hours=hours, dry=False)
+    import derive
+    derive.run(conn, hours=hours, submit_mode=True)
 
-    # alpha questions can't auto-revise until derive.py exists — count and warn
     unanswered = conn.execute(
         """SELECT COUNT(*) FROM questions q JOIN matches m USING(match_id)
            WHERE q.status='open' AND m.kickoff_utc <= ?

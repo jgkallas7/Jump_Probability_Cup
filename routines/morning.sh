@@ -17,6 +17,7 @@ cd "$REPO"
   $PY snapshot.py pinnacle --hours 30 | tail -2
   $PY forecast.py --hours 30 | head -50
   $PY submit.py submit --hours 30
+  $PY derive.py --hours 30 --submit
   # loud flag for the derive.py gap: alpha questions due today w/o submission
   $PY - <<'EOF'
 import db

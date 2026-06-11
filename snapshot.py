@@ -157,14 +157,20 @@ def snapshot_pinnacle(conn, hours: int = 48, markets: str = "",
                     # Markets like team_totals/alternate_totals lump several
                     # independent 2-way books into one outcomes list. Devig
                     # within (description, point) groups, never across them.
-                    # Spread markets pair across SYMMETRIC points (A -0.5
-                    # pairs with B +0.5) — group those by |point|.
+                    # Spread pairs are (team A at +p) <-> (team B at -p): a
+                    # ladder has BOTH pairings per |p| — key on the signed
+                    # point of the alphabetically-first team so the two
+                    # pairings never collapse into one 4-way devig.
                     is_spread = "spreads" in mkt["key"]
                     groups: dict[tuple, list] = {}
                     for o in outs:
                         pt = o.get("point")
-                        gkey = (None, abs(pt)) if is_spread and pt is not None \
-                            else (o.get("description"), pt)
+                        if is_spread and pt is not None:
+                            first = min(x["name"] for x in outs)
+                            signed = pt if o["name"] == first else -pt
+                            gkey = (None, f"pair@{signed}")
+                        else:
+                            gkey = (o.get("description"), pt)
                         groups.setdefault(gkey, []).append(o)
                     for (desc, point), grp in groups.items():
                         gprobs = [decimal_to_prob(o["price"]) for o in grp]

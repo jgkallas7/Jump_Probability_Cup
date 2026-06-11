@@ -49,6 +49,11 @@ def main() -> None:
         print(f"[{stamp}] sentinel: {m['home']} vs {m['away']} ko {m['kickoff_utc']}")
     hours = SENTINEL_WINDOW_MIN / 60 + 0.25
     snapshot.snapshot_pinnacle(conn, hours=hours)
+    # belt-and-braces: if the morning run ever failed, never-submitted
+    # questions get rescued here (idempotent — pending excludes submitted)
+    import forecast
+    forecast.run(conn, hours=hours)
+    submit.cmd_submit(conn, hours=hours, dry=False)
     submit.cmd_revise(conn, hours=hours, dry=False)
     import derive
     derive.run(conn, hours=hours, submit_mode=True)

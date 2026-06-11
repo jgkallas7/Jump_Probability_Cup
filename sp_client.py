@@ -14,6 +14,7 @@ Hard facts from the docs:
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 import requests
@@ -38,10 +39,15 @@ class SPClient:
         self.s = requests.Session()
         self.s.headers["Authorization"] = f"Bearer {_api_key()}"
 
-    def _req(self, method: str, path: str, **kw):
-        r = self.s.request(method, f"{SP_API_BASE}{path}", timeout=30, **kw)
-        r.raise_for_status()
-        return r.json()
+    def _req(self, method: str, path: str, _retries: int = 3, **kw):
+        for attempt in range(_retries + 1):
+            r = self.s.request(method, f"{SP_API_BASE}{path}", timeout=60, **kw)
+            if r.status_code == 429 and attempt < _retries:
+                wait = float(r.headers.get("Retry-After", 0) or 0) or 2 ** (attempt + 3)
+                time.sleep(wait)  # 60 req/min/IP; back off and retry
+                continue
+            r.raise_for_status()
+            return r.json()
 
     # ---- discovery ----
     def events(self, limit: int = 20) -> list:

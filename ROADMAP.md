@@ -47,6 +47,12 @@ separate devig methods; book microstructure has drifted). Two tiers:
   /scores only reaches 3 days back).
 - Extend to totals/btts closers for prop-adjacent calibration if tier-1
   shows method choice matters there.
+- SEGMENT by match context (user insight 2026-06-11): group-stage vs
+  knockout-90min vs club. Knockout 90' draw rates run higher (pens/ET
+  as fallback changes incentives); club leagues differ again. Calibrate
+  per segment. Contest implication: knockout "win in regulation"
+  questions at 2-3x multipliers are where the field's someone-has-to-win
+  draw-underpricing is worst — our highest-EV structural edge.
 
 ## 5. derive.py — productionize alpha derivations
 - Tonight's inline scripts (skellam corner/SOT races, poisson card/team-goal

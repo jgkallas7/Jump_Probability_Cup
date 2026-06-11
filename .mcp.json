@@ -6,6 +6,10 @@
       "headers": {
         "Authorization": "Bearer ${SP_API_KEY}"
       }
+    },
+    "odds-api": {
+      "command": "/home/jgkal/.wc_cup_venv/bin/python",
+      "args": ["mcp/odds_api_server.py"]
     }
   }
 }

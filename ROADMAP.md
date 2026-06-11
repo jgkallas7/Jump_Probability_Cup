@@ -21,6 +21,19 @@ market anchors, and simulation. Priority order:
 - Bivariate Poisson / Dixon-Coles, team attack/defense rates calibrated to
   devigged market lines (totals + h2h as the anchor, NOT to out-predict
   books), empirical goal-timing curves for half splits.
+- From PELE methodology (read 2026-06-11): pure Poisson underestimates
+  draws (esp 0-0) and blowouts — Silver uses negative binomial w/
+  correlation term. Our derive.py poisson derivations (btts-combo, half
+  splits, team-scores) inherit the bias; Dixon-Coles rho or negbin fixes.
+- MATCHDAY-3 INCENTIVES (June 24-27, schedulable edge): mutual-draw-
+  advances pairs -> -1 combined goal; both-must-win -> +1. Books partial-
+  price it; SP field likely doesn't. Apply to group-finale totals/draw
+  questions with standings context.
+- Cards covariates: better teams fewer bookings, more vs tougher opponents,
+  home teams fewer (PELE simulates this for Fair Play tiebreaker).
+- Knockout-draw hypothesis nuance: PELE applies 1.1x rating-gap multiplier
+  in knockouts (chalky) which cuts 90' draws for fixed pairing; bracket
+  pairing similarity cuts the other way. Calibration must separate the two.
 - Outputs every derived question consistently from ONE joint distribution:
   btts-and-over combos, team-scores-in-half, half-vs-half comparisons,
   race props with tie probabilities.

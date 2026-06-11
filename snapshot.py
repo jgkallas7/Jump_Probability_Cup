@@ -138,7 +138,9 @@ def snapshot_pinnacle(conn, hours: int = 48, markets: str = "",
         label = f"{ev['away_team']} vs {ev['home_team']}"
         for bm in ev.get("bookmakers", []):
             for mkt in bm.get("markets", []):
-                outs = mkt.get("outcomes", [])
+                # price 1.0 = suspended/settled outcome — skip, never raise
+                outs = [o for o in mkt.get("outcomes", [])
+                        if (o.get("price") or 0) > 1.0]
                 probs = [decimal_to_prob(o["price"]) for o in outs]
                 if mkt["key"] == "h2h" and len(outs) == 3:
                     by = {o["name"]: decimal_to_prob(o["price"]) for o in outs}

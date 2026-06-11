@@ -64,6 +64,19 @@ DEFAULT_BOOK_WEIGHT = 0.0     # soft books never price fair value
 # (books pull/repost on lineup news around T-60 — exactly when we pull).
 MAX_QUOTE_AGE_MIN = 10.0
 
+# Thin prop markets (player props, team totals by half) are often quoted
+# ONLY by retail books. There, a low-weight soft quote beats refusing to
+# answer — these weights apply solely to THIN_MARKET_PREFIXES markets and
+# never touch match-level fair value. Sharp whitelist still dominates when
+# present (pinnacle 3.0 vs 0.5-0.75 here).
+THIN_MARKET_PREFIXES = ("player_", "team_totals", "alternate_team_totals")
+THIN_MARKET_EXTRA_WEIGHTS: dict[str, float] = {
+    "williamhill": 0.75,
+    "betrivers": 0.5,
+    "betmgm": 0.5,
+    "skybet": 0.5,
+}
+
 # SportsPredict contest API (confirmed from /probabilitycup/api docs).
 SP_API_BASE = "https://api.sportspredict.com/api/v1"
 SP_RATE_LIMIT_PER_MIN = 60          # per IP, REST + MCP combined

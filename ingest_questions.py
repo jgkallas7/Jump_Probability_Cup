@@ -22,11 +22,28 @@ from sp_client import SPClient
 QTYPE_RULES: list[tuple[str, str, str]] = [
     # (regex on question text, qtype, market_mapping) — first hit wins.
     # Order matters: specific prop patterns before the broad match-result one.
+    # Priced props (per opener discovery: Pinnacle quotes cards/corners
+    # spreads; half-qualified comparisons have no book market).
+    (r"(halftime|first half|second half).*(corner|card)|"
+     r"(corner|card).*(first half|second half)", "prop", "NO_MARKET"),
+    (r"receive more cards than", "cards_spread", "alternate_spreads_cards"),
+    (r"more corner kicks than", "corners_spread", "alternate_spreads_corners"),
     (r"(corner|card|booking|foul|penalt|free kick|offside)", "prop", "NO_MARKET"),
+    (r"will .+ have at least \d+ shots? on target", "player_sot",
+     "player_shots_on_target"),
     (r"shots? on target", "prop", "NO_MARKET"),
-    (r"score or assist|score a goal|assist a goal", "player_prop", "NO_MARKET"),
+    (r"score or assist", "player_prop", "NO_MARKET"),
+    (r"score a goal \(excluding own goals\)", "player_scorer",
+     "player_goal_scorer_anytime"),
     (r"(first|opening) goal", "prop", "NO_MARKET"),
-    (r"score in the (first|second) half", "team_prop", "NO_MARKET"),
+    (r"score in the second half", "team_total_h2", "alternate_team_totals_h2"),
+    (r"score in the first half", "team_total_h1", "team_totals_h1"),
+    (r"at halftime, will .+ be winning|winning at halftime", "result_h1",
+     "h2h_3_way_h1"),
+    (r"(tied at halftime|at halftime, will the match be tied)", "result_h1",
+     "h2h_3_way_h1"),
+    (r"score more goals than .+ in the second half", "result_h2",
+     "h2h_3_way_h2"),
     (r"both teams .*score and", "btts_combo", "NO_MARKET"),
     (r"both teams .*score", "btts", "btts"),
     (r"clean sheet", "btts", "btts_derived"),

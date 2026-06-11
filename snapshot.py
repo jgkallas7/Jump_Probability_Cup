@@ -113,7 +113,10 @@ def snapshot_pinnacle(conn, hours: int = 48, markets: str = "",
     # covers every event. Additional markets (team_totals, totals_h2, btts,
     # props) are ONLY served by the per-event endpoint (bulk returns 422).
     featured = markets or "h2h,totals"
-    additional = "team_totals,totals_h2"
+    additional = ("team_totals,totals_h1,totals_h2,team_totals_h1,"
+                  "alternate_team_totals_h2,alternate_spreads_cards,"
+                  "alternate_spreads_corners,h2h_3_way_h1,h2h_3_way_h2,"
+                  "player_goal_scorer_anytime,player_shots_on_target")
     regions = regions or "eu,uk,us"
     ts = _now()
     horizon = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
@@ -154,10 +157,15 @@ def snapshot_pinnacle(conn, hours: int = 48, markets: str = "",
                     # Markets like team_totals/alternate_totals lump several
                     # independent 2-way books into one outcomes list. Devig
                     # within (description, point) groups, never across them.
+                    # Spread markets pair across SYMMETRIC points (A -0.5
+                    # pairs with B +0.5) — group those by |point|.
+                    is_spread = "spreads" in mkt["key"]
                     groups: dict[tuple, list] = {}
                     for o in outs:
-                        groups.setdefault(
-                            (o.get("description"), o.get("point")), []).append(o)
+                        pt = o.get("point")
+                        gkey = (None, abs(pt)) if is_spread and pt is not None \
+                            else (o.get("description"), pt)
+                        groups.setdefault(gkey, []).append(o)
                     for (desc, point), grp in groups.items():
                         gprobs = [decimal_to_prob(o["price"]) for o in grp]
                         if len(grp) >= 2:
@@ -170,7 +178,8 @@ def snapshot_pinnacle(conn, hours: int = 48, markets: str = "",
                         for o, rp, fp, fm in zip(grp, gprobs, fair, fair_m):
                             outcome = (f"{desc} {o['name']}" if desc else o["name"])
                             rows.append((ts, "odds_api", bm["key"], ev["id"], label,
-                                         mkt["key"], outcome, point,
+                                         mkt["key"], outcome,
+                                         o.get("point", point),  # signed for spreads
                                          o["price"], rp, fp, fm, div,
                                          mkt.get("last_update")))
 

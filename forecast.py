@@ -36,6 +36,8 @@ YES_ONLY_MARKETS = {"player_goal_scorer_anytime": 0.93}
 # SP question names that differ from Odds API team names.
 TEAM_ALIASES = {
     "united states": "USA",
+    "türkiye": "Turkey",
+    "turkiye": "Turkey",
     "south korea": "South Korea",
     "ivory coast": "Ivory Coast",
     "czechia": "Czech Republic",
@@ -88,10 +90,11 @@ def map_question(text: str, mapping: str, home: str, away: str):
         return None
 
     if mapping == "team_totals":
-        m = re.match(r"Will (.+?) score at least (\d+) goals?\?", t)
+        m = re.match(r"Will (.+?) score (?:at least (\d+)|(\d+) or more total) "
+                     r"goals?\?", t)
         if m:
             team = resolve_team(m.group(1), home, away)
-            n = int(m.group(2))
+            n = int(m.group(2) or m.group(3))
             if team:
                 return ("team_totals", f"{team} Over", n - 0.5)
         return None
@@ -110,7 +113,7 @@ def map_question(text: str, mapping: str, home: str, away: str):
         return None
 
     if mapping == "alternate_spreads_corners":
-        m = re.match(r"Will (.+?) have more corner kicks than (.+?)\?", t)
+        m = re.match(r"Will (.+?) (?:have|finish with) more corner kicks than (.+?)\?", t)
         if m:
             team = resolve_team(m.group(1), home, away)
             return ("alternate_spreads_corners", team, -0.5) if team else None
@@ -147,7 +150,8 @@ def map_question(text: str, mapping: str, home: str, away: str):
         return None
 
     if mapping == "player_shots_on_target":
-        m = re.match(r"Will (.+?) have at least (\d+) shots? on target\?", t)
+        m = re.match(r"Will (.+?) have (?:at least )?(\d+)(?: or more)? "
+                     r"shots? on target\?", t)
         if m:
             player, n = m.group(1).strip(), int(m.group(2))
             return ("player_shots_on_target", f"{player} Over", n - 0.5)

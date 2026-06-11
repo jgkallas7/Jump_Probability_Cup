@@ -26,10 +26,12 @@ QTYPE_RULES: list[tuple[str, str, str]] = [
     # spreads; half-qualified comparisons have no book market).
     (r"(halftime|first half|second half).*(corner|card)|"
      r"(corner|card).*(first half|second half)", "prop", "NO_MARKET"),
-    (r"receive more cards than", "cards_spread", "alternate_spreads_cards"),
-    (r"more corner kicks than", "corners_spread", "alternate_spreads_corners"),
+    (r"(receive|be shown) more cards than", "cards_spread", "alternate_spreads_cards"),
+    (r"(have|finish with) more corner kicks than", "corners_spread", "alternate_spreads_corners"),
     (r"(corner|card|booking|foul|penalt|free kick|offside)", "prop", "NO_MARKET"),
-    (r"will .+ have at least \d+ shots? on target", "player_sot",
+    (r"shots? on target.*(first|second) half|"
+     r"(halftime|first half|second half).*shots? on target", "prop", "NO_MARKET"),
+    (r"will .+ have (at least \d+|\d+ or more) shots? on target", "player_sot",
      "player_shots_on_target"),
     (r"shots? on target", "prop", "NO_MARKET"),
     (r"score or assist", "player_prop", "NO_MARKET"),
@@ -49,7 +51,7 @@ QTYPE_RULES: list[tuple[str, str, str]] = [
     (r"clean sheet", "btts", "btts_derived"),
     (r"(first|second) half .*\d+ or (fewer|less|more) total goals",
      "total_half", "totals_half"),
-    (r"score at least \d+ goal", "team_total", "team_totals"),
+    (r"score (at least \d+|\d+ or more total) goal", "team_total", "team_totals"),
     (r"\d+ or (fewer|less|more) total goals", "total", "totals"),
     (r"(over|under|more than|fewer than|at least) .*(goal|goals)", "total", "totals"),
     (r"advance|qualify|progress|next round", "advancement", "to_advance"),
@@ -159,7 +161,30 @@ def main() -> None:
             conn.execute("UPDATE matches SET sp_match_id=? WHERE match_id=?",
                          (m["id"], hit))
         else:
+            # knockout fixtures appear with placeholder names ('1A vs 2B')
+            # before Odds API events exist — create a synthetic match row so
+            # questions NEVER orphan with match_id NULL (invisible to every
+            # pipeline query). Re-ingest later relinks via sp_match_id.
+            synth_id = f"sp:{m['id']}"
+            teams = sp_match_teams(m.get("name", "")) or ("TBD", "TBD")
+            conn.execute(
+                """INSERT INTO matches(match_id, home, away, kickoff_utc,
+                     status, sp_match_id) VALUES (?,?,?,?, 'scheduled', ?)
+                   ON CONFLICT(match_id) DO UPDATE SET
+                     home=excluded.home, away=excluded.away,
+                     kickoff_utc=excluded.kickoff_utc""",
+                (synth_id, teams[0], teams[1],
+                 m.get("opening_time") or m.get("closing_time") or "",
+                 m["id"]))
+            sp_to_ours[m["id"]] = synth_id
             unmatched.append(m.get("name", ""))
+    # relink any synthetic rows once a real Odds API twin exists
+    for r in conn.execute("""SELECT m1.match_id synth, m2.match_id real
+        FROM matches m1 JOIN matches m2 ON m1.sp_match_id = m2.sp_match_id
+        WHERE m1.match_id LIKE 'sp:%' AND m2.match_id NOT LIKE 'sp:%'""").fetchall():
+        conn.execute("UPDATE questions SET match_id=? WHERE match_id=?",
+                     (r["real"], r["synth"]))
+        conn.execute("DELETE FROM matches WHERE match_id=?", (r["synth"],))
     conn.commit()
     if unmatched:
         print(f"WARNING: {len(unmatched)} SP matches had no Odds API twin:",
@@ -176,6 +201,13 @@ def main() -> None:
         match_ref = sp_to_ours.get(sp_mid)
         qtype, mapping = classify(mk.get("question", ""))
         by_mapping[mapping] = by_mapping.get(mapping, 0) + 1
+        # deadline of record = KICKOFF ("markets close in the last second
+        # before matches start"); SP's closing_time field is match END.
+        kickoff = conn.execute(
+            "SELECT kickoff_utc FROM matches WHERE match_id=?",
+            (match_ref,)).fetchone() if match_ref else None
+        deadline = kickoff["kickoff_utc"] if kickoff \
+            else (mk.get("match") or {}).get("closing_time")
         conn.execute(
             """INSERT INTO questions(qid, match_id, qtype, text,
                                      opens_at, deadline, status, market_mapping)
@@ -186,8 +218,7 @@ def main() -> None:
                  match_id=excluded.match_id, text=excluded.text""",
             (mk["id"], match_ref, qtype, mk.get("question"),
              (mk.get("match") or {}).get("opening_time"),
-             (mk.get("match") or {}).get("closing_time"),
-             mk.get("status", "open"), mapping))
+             deadline, mk.get("status", "open"), mapping))
         total_q += 1
     conn.commit()
 

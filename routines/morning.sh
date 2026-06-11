@@ -10,6 +10,15 @@ cd "$REPO"
 
 {
   echo "===== morning $(date -u +%FT%H:%M) ====="
+  # surface any overnight failures FIRST
+  if [ -s /home/jgkal/wc_logs/FAILURES.log ]; then
+    echo "!!! FAILURES SINCE LAST CHECK !!!"
+    tail -10 /home/jgkal/wc_logs/FAILURES.log
+  fi
+  # heartbeat: sentinel should have ~96 entries/day
+  SENT=$(grep -c "sentinel" /home/jgkal/wc_logs/sentinel.log 2>/dev/null || echo 0)
+  echo "sentinel log lines to date: $SENT"
+  $PY -c "import db, submit; print('reconcile:', submit.reconcile(db.init()), 'records')"
   $PY calibrate.py sync          # grade yesterday's settlements
   $PY calibrate.py report | tail -30
   $PY fetch_schedule.py | tail -3   # free; picks up knockout fixtures later

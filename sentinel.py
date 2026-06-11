@@ -18,6 +18,28 @@ import submit
 
 SENTINEL_WINDOW_MIN = 75
 CREDIT_FLOOR = 5000
+FAILURES_LOG = "/home/jgkal/wc_logs/FAILURES.log"
+NTFY_TOPIC = "wc-cup-kidtwist-a7x3"   # subscribe in the ntfy app on your phone
+
+
+def _alert(msg: str) -> None:
+    """Failure visibility: append to FAILURES.log and best-effort phone push."""
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    line = f"[{stamp}] {msg}"
+    print(line)
+    try:
+        with open(FAILURES_LOG, "a") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
+    try:
+        import requests
+        requests.post(f"https://ntfy.sh/{NTFY_TOPIC}",
+                      data=msg.encode(), timeout=10,
+                      headers={"Title": "WC Cup pipeline failure",
+                               "Priority": "high"})
+    except Exception:
+        pass
 
 
 def remaining_credits(conn) -> int | None:
@@ -48,15 +70,21 @@ def main() -> None:
     for m in near:
         print(f"[{stamp}] sentinel: {m['home']} vs {m['away']} ko {m['kickoff_utc']}")
     hours = SENTINEL_WINDOW_MIN / 60 + 0.25
-    snapshot.snapshot_pinnacle(conn, hours=hours)
-    # belt-and-braces: if the morning run ever failed, never-submitted
-    # questions get rescued here (idempotent — pending excludes submitted)
-    import forecast
-    forecast.run(conn, hours=hours)
-    submit.cmd_submit(conn, hours=hours, dry=False)
-    submit.cmd_revise(conn, hours=hours, dry=False)
-    import derive
-    derive.run(conn, hours=hours, submit_mode=True)
+    # every step isolated: a failure in one must never abort the rest
+    # (review finding), and every failure lands in FAILURES.log + ntfy
+    steps = [
+        ("snapshot", lambda: snapshot.snapshot_pinnacle(conn, hours=hours)),
+        ("forecast", lambda: __import__("forecast").run(conn, hours=hours)),
+        ("rescue-submit", lambda: submit.cmd_submit(conn, hours=hours, dry=False)),
+        ("revise", lambda: submit.cmd_revise(conn, hours=hours, dry=False)),
+        ("derive", lambda: __import__("derive").run(conn, hours=hours,
+                                                    submit_mode=True)),
+    ]
+    for name, fn in steps:
+        try:
+            fn()
+        except Exception as e:
+            _alert(f"sentinel step '{name}' FAILED: {e}")
 
     unanswered = conn.execute(
         """SELECT COUNT(*) FROM questions q JOIN matches m USING(match_id)

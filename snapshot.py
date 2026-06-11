@@ -119,10 +119,18 @@ def snapshot_pinnacle(conn, hours: int = 48, markets: str = "",
                   "player_goal_scorer_anytime,player_shots_on_target")
     regions = regions or "eu,uk,us"
     ts = _now()
-    horizon = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
+    now_dt = datetime.now(timezone.utc)
+    # retire finished matches: keeps them out of every window forever
+    # (review finding: stale event ids 404 the chain / leak credits)
+    conn.execute("UPDATE matches SET status='completed' "
+                 "WHERE status='scheduled' AND kickoff_utc < ?",
+                 ((now_dt - timedelta(hours=3.5)).isoformat(),))
+    conn.commit()
+    horizon = (now_dt + timedelta(hours=hours)).isoformat()
     match_ids = [r["match_id"] for r in conn.execute(
         "SELECT match_id FROM matches WHERE kickoff_utc <= ? "
-        "AND status = 'scheduled' ORDER BY kickoff_utc", (horizon,))]
+        "AND kickoff_utc > ? AND status = 'scheduled' ORDER BY kickoff_utc",
+        (horizon, (now_dt - timedelta(hours=2)).isoformat()))]
     if not match_ids:
         print(f"no matches inside {hours}h window")
         return 0
@@ -130,7 +138,12 @@ def snapshot_pinnacle(conn, hours: int = 48, markets: str = "",
     client = OddsClient(conn)
     events = client.odds(SPORT_KEY, featured, regions, event_ids=match_ids)
     for mid in match_ids:
-        ev_extra = client.event_odds(SPORT_KEY, mid, additional, regions)
+        try:
+            ev_extra = client.event_odds(SPORT_KEY, mid, additional, regions)
+        except Exception as e:  # one dead event must never kill the chain
+            print(f"[snapshot] event {mid[:8]} additional pull failed: {e}",
+                  file=sys.stderr)
+            continue
         if ev_extra.get("bookmakers"):
             events.append(ev_extra)
     rows: list[tuple] = []

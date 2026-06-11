@@ -99,8 +99,40 @@ def cmd_submit(conn, hours: float, dry: bool) -> None:
                      (hit.get("trade") or {}).get("id"), r["fid"]))
         conn.commit()
         print(f"  batch {i//50 + 1}: {resp.get('succeeded')}/{resp.get('total')} ok")
+        if any("already exists" in str(x.get("error", "")) for x in fail):
+            # server has predictions our db doesn't know about (lost
+            # response, parallel writer) — reconcile, restoring PATCH-ability
+            n = reconcile(conn, c, lobby_id)
+            print(f"    reconciled {n} records from server after 409s")
         for x in fail:
-            print(f"    FAILED {x.get('market_id')}: {x.get('error')}")
+            if "already exists" not in str(x.get("error", "")):
+                print(f"    FAILED {x.get('market_id')}: {x.get('error')}")
+
+
+def reconcile(conn, client: SPClient | None = None,
+              lobby_id: str | None = None) -> int:
+    """Sync local bookkeeping from server truth: any server prediction with
+    no local submitted row gets recorded (with sp_prediction_id, so it stays
+    revisable). Idempotent; safe to run any time."""
+    c = client or SPClient()
+    lobby = lobby_id or _lobby(conn)
+    ts = _now()
+    fixed = 0
+    for p in c.my_predictions(lobby):
+        qid = p.get("market_id") or p.get("id")
+        if conn.execute("SELECT 1 FROM forecasts WHERE qid=? AND "
+                        "submitted_at IS NOT NULL", (qid,)).fetchone():
+            continue
+        prob = p["probability"]
+        prob = prob / 100 if prob > 1 else prob
+        conn.execute(
+            """INSERT INTO forecasts(qid, ts, blend_w, final_prob, deviation_bps,
+               deviation_reason, submitted_at, submitted_prob, sp_prediction_id)
+               VALUES (?,?,0,?,0,'reconciled from server',?,?,?)""",
+            (qid, ts, prob, ts, prob, p.get("id")))
+        fixed += 1
+    conn.commit()
+    return fixed
 
 
 def cmd_revise(conn, hours: float, dry: bool) -> None:

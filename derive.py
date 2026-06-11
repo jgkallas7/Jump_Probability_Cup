@@ -174,7 +174,8 @@ def h_total_sot(m, g, conn, now):
     lam = BASE["sot_lambda"] * (lt / BASE["goals_lambda"])
     if half:
         lam *= BASE["h2_sot_share"]
-    return p_geq(lam, k), "anchored", f"sot lam={lam:.2f} scaled by goals"
+    p = 0.5 + 0.6 * (p_geq(lam, k) - 0.5)  # damped: weakest family (review)
+    return p, "anchored", f"sot lam={lam:.2f} damped0.6"
 
 
 def h_team_sot(m, g, conn, now):
@@ -187,7 +188,8 @@ def h_team_sot(m, g, conn, now):
         * sot_share(conn, m, team, now)
     if half:
         lam *= BASE["h2_sot_share"]
-    return p_geq(lam, k), "anchored", f"team sot lam={lam:.2f}"
+    p = 0.5 + 0.6 * (p_geq(lam, k) - 0.5)  # damped: weakest family (review)
+    return p, "anchored", f"team sot lam={lam:.2f} damped0.6"
 
 
 def h_pen_or_red(m, g, conn, now):
@@ -294,8 +296,8 @@ def h_sot_race_h2(m, g, conn, now):
     _, _, lt = match_lambdas(conn, m, now)
     share = sot_share(conn, m, team, now)
     lam = BASE["sot_lambda"] * (lt / BASE["goals_lambda"]) * BASE["h2_sot_share"]
-    return (skellam_gt(lam * share, lam * (1 - share)), "anchored",
-            f"sot race share={share:.3f}")
+    p = 0.5 + 0.6 * (skellam_gt(lam * share, lam * (1 - share)) - 0.5)
+    return p, "anchored", f"sot race share={share:.3f} damped0.6"
 
 
 def h_h2_gt_h1(m, g, conn, now):
@@ -374,10 +376,14 @@ def run(conn, hours: float = 30, submit_mode: bool = False, dry: bool = False):
     from submit import _lobby, _to_int
     now = datetime.now(timezone.utc)
     horizon = (now + timedelta(hours=hours)).isoformat()
+    # NO_MARKET only: book-mapped questions belong to forecast/consensus —
+    # derive must NEVER PATCH its cruder Poisson over a sharp consensus
+    # value (review finding: ping-pong with derive winning at close).
     qs = conn.execute("""
         SELECT q.qid, q.text, q.match_id, m.home, m.away
         FROM questions q JOIN matches m USING(match_id)
-        WHERE q.status='open' AND m.kickoff_utc > ? AND m.kickoff_utc <= ?
+        WHERE q.status='open' AND q.market_mapping = 'NO_MARKET'
+          AND m.kickoff_utc > ? AND m.kickoff_utc <= ?
         ORDER BY m.kickoff_utc""",
         ((now - timedelta(hours=2)).isoformat(), horizon)).fetchall()
 
@@ -405,10 +411,11 @@ def run(conn, hours: float = 30, submit_mode: bool = False, dry: bool = False):
         old = prev.get(q["qid"])
         new_int = _to_int(prob)
         if old is None:
-            conn.execute(
-                """INSERT INTO forecasts(qid, ts, blend_w, final_prob,
-                   deviation_bps, deviation_reason) VALUES (?,?,0,?,0,?)""",
-                (q["qid"], ts, round(prob, 5), full_reason))
+            if not dry:  # dry-run must be DRY (review finding)
+                conn.execute(
+                    """INSERT INTO forecasts(qid, ts, blend_w, final_prob,
+                       deviation_bps, deviation_reason) VALUES (?,?,0,?,0,?)""",
+                    (q["qid"], ts, round(prob, 5), full_reason))
             new.append((q["qid"], new_int, q["text"]))
         elif abs(new_int - round(old * 100)) >= ALPHA_REVISE_PTS \
                 and pred_ids.get(q["qid"]):

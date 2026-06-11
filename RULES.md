@@ -13,13 +13,27 @@ Fetched 2026-06-10. Quotes are verbatim from the published docs.
 | — | Submission format | Integers **1-99 inclusive**. One prediction per market per user. ~10 binary markets per match. |
 | — | Question ingest | `GET /events` → `/lobbies` → `/matches` → `/markets` (binary yes/no per match). Clean API ingest; no scraping needed. |
 
+## Resolved in second pass (full API docs, 2026-06-10)
+
+- **§8 Q1 (knockout semantics):** question text disambiguates — sample reads
+  "Will Mexico win the match **in regulation**?" Map per question text, not
+  per stage. 90-min questions -> 3-way h2h; advancement -> to-advance markets.
+- **§8 Q5 (multi-entry):** "each bot is a separate leaderboard entry," 2 bots
+  per account. CONFLICTS with "one prediction per market per user" — verify
+  live with both keys on one cheap market before strategizing on it.
+- Deadline of record: each market's `closing_time` field (poll it; don't
+  assume kickoff).
+- Read-back gotcha: write integer 75, read back decimal 0.75.
+- Field-avg Brier is NOT exposed in `/results` — crowd model must be inferred
+  (own Brier vs leaderboard movement) unless the platform publishes it later.
+- No webhooks/pagination; poll-based settlement via `GET /results`.
+
 ## Still open
 
 | # | Question | Plan |
 |---|----------|------|
-| 1 | Knockout resolution (90-min vs advancement) | Read each market's text when knockout questions open; expect both kinds. Map to the matching book market (h2h vs to-advance). |
 | 4 | Employer conflict | Terms only require a free SportsPredict account; no employment language found. User judgment. |
-| 5 | Multi-entry / household | Not addressed in published docs. 2 bots/account but "one prediction per market per user." Assume one entry per person until told otherwise. |
+| 5b | Two bots, same market, different probs? | Live test once both keys exist. |
 | 6 | Tiebreakers | "Determined as described in the Official Rules" — not published. Ignore; play for clear first. |
 
 ## Architecture consequences

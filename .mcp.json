@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "sportspredict": {
+      "type": "http",
+      "url": "https://api.sportspredict.com/api/v1/mcp",
+      "headers": {
+        "Authorization": "Bearer ${SP_API_KEY}"
+      }
+    }
+  }
+}

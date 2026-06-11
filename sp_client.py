@@ -84,10 +84,18 @@ class SPClient:
                          json={"predictions": predictions})
 
     def my_predictions(self, lobby_id: str) -> list:
+        """NB: probability reads back as 0-1 decimal, not the 1-99 integer."""
         return self._req("GET", "/predictions", params={"lobby_id": lobby_id})
 
     def results(self, lobby_id: str) -> list:
         return self._req("GET", "/results", params={"lobby_id": lobby_id})
+
+    # ---- key management (bot rename; creation is UI-first) ----
+    def keys(self) -> list:
+        return self._req("GET", "/keys")
+
+    def rename_key(self, key_id: str, label: str) -> dict:
+        return self._req("PATCH", f"/keys/{key_id}", json={"label": label})
 
 
 if __name__ == "__main__":

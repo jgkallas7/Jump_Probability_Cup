@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS market_snapshots(
     raw_prob       REAL NOT NULL,
     fair_prob      REAL NOT NULL,       -- power devig (primary)
     fair_prob_mult REAL NOT NULL,       -- multiplicative (sanity check)
-    divergence_pts REAL NOT NULL        -- |power - mult| * 100
+    divergence_pts REAL NOT NULL,       -- |power - mult| * 100
+    quote_ts       TEXT                 -- book's own last_update (staleness)
 );
 CREATE INDEX IF NOT EXISTS idx_snap_match ON market_snapshots(match_id, market, ts);
 

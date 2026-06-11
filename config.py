@@ -36,13 +36,32 @@ WC_LEAGUES: dict[str, str] = {
     "20200": "GROUP J", "20201": "GROUP K", "20202": "GROUP L",
 }
 
-# Consensus weights by book key (Odds API bookmaker keys + our 'bookmaker_eu').
-# Pinnacle is the sharp anchor for soccer; everything else default-weights 1.
+# Consensus is WHITELIST-ONLY: books with weight > 0 enter fair value;
+# everything else (45+ soft books echoing each other) is excluded from
+# pricing but still snapshotted — soft-book average is the CROWD PROXY
+# for the SPEC §5 posture model, not a fair-value input.
+# Empirics (opener, 2026-06-10): exchange cluster (betfair_ex_uk/eu,
+# matchbook, smarkets) locked at identical prices, 0.5% overround;
+# Pinnacle 3.6% vig. betfair_ex_eu excluded as a duplicate of _uk.
 BOOK_WEIGHTS: dict[str, float] = {
     "pinnacle": 3.0,
-    "bookmaker_eu": 1.5,
+    "betfair_ex_uk": 2.5,     # deepest market list (32), near-zero overround
+    "bookmaker_eu": 1.5,      # our gateway tape (sharp offshore)
+    "kalshi": 1.5,            # our own data, liquid near kickoff
+    "matchbook": 0.5,         # exchange echo of betfair — low extra info
+    "smarkets": 0.5,
+    "draftkings": 1.0,        # props leader (16 prop markets on opener)
+    "fanduel": 1.0,           # props
+    "betonlineag": 1.0,       # sharp-ish offshore
+    "betanysports": 0.75,     # reduced-juice shop
+    "onexbet": 0.75,          # big grey book, decent soccer
+    "marathonbet": 0.75,
 }
-DEFAULT_BOOK_WEIGHT = 1.0
+DEFAULT_BOOK_WEIGHT = 0.0     # soft books never price fair value
+
+# Quotes older than this at decision time are dropped from consensus
+# (books pull/repost on lineup news around T-60 — exactly when we pull).
+MAX_QUOTE_AGE_MIN = 10.0
 
 # SportsPredict contest API (confirmed from /probabilitycup/api docs).
 SP_API_BASE = "https://api.sportspredict.com/api/v1"

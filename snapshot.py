@@ -28,11 +28,16 @@ def _now() -> str:
 
 
 def _insert(conn, rows: list[tuple]) -> None:
+    try:
+        conn.execute("ALTER TABLE market_snapshots ADD COLUMN quote_ts TEXT")
+    except Exception:
+        pass  # column exists
     conn.executemany(
         """INSERT INTO market_snapshots
            (ts, source, book, match_id, event_label, market, outcome, point,
-            raw_price, raw_prob, fair_prob, fair_prob_mult, divergence_pts)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            raw_price, raw_prob, fair_prob, fair_prob_mult, divergence_pts,
+            quote_ts)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         rows)
     conn.commit()
 
@@ -61,7 +66,7 @@ def snapshot_bookmaker(conn) -> int:
             for sel, rp, fp, fm in zip(g["selections"], probs, fair, fair_m):
                 rows.append((ts, "bookmaker_gateway", "bookmaker_eu", None,
                              g["event_label"], "h2h", sel["label"], None,
-                             None, rp, fp, fm, tw.divergence_pts))
+                             None, rp, fp, fm, tw.divergence_pts, ts))
             for t in g.get("totals", []):
                 rp_o = american_to_prob(t["over"])
                 rp_u = american_to_prob(t["under"])
@@ -70,10 +75,10 @@ def snapshot_bookmaker(conn) -> int:
                 div = round(max(abs(f_o - m_o), abs(f_u - m_u)) * 100, 3)
                 rows.append((ts, "bookmaker_gateway", "bookmaker_eu", None,
                              g["event_label"], "totals", "Over", t["point"],
-                             None, rp_o, f_o, m_o, div))
+                             None, rp_o, f_o, m_o, div, ts))
                 rows.append((ts, "bookmaker_gateway", "bookmaker_eu", None,
                              g["event_label"], "totals", "Under", t["point"],
-                             None, rp_u, f_u, m_u, div))
+                             None, rp_u, f_u, m_u, div, ts))
         else:
             probs = [american_to_prob(s["american"]) for s in g["selections"]]
             fair = devig_probs(probs, "power")
@@ -83,7 +88,8 @@ def snapshot_bookmaker(conn) -> int:
                 rows.append((ts, "bookmaker_gateway", "bookmaker_eu", None,
                              g["event_label"], market, sel["label"], None,
                              None, rp, fp, fm,
-                             round(max(abs(a - b) for a, b in zip(fair, fair_m)) * 100, 3)))
+                             round(max(abs(a - b) for a, b in zip(fair, fair_m)) * 100, 3),
+                             ts))
 
     _insert(conn, rows)
     print(f"bookmaker: {len(games)} markets -> {len(rows)} rows "
@@ -127,7 +133,7 @@ def snapshot_pinnacle(conn, hours: int = 48) -> int:
                         rows.append((ts, "odds_api", bm["key"], ev["id"], label,
                                      "h2h", o["name"], None, o["price"],
                                      decimal_to_prob(o["price"]), fp, fm,
-                                     tw.divergence_pts))
+                                     tw.divergence_pts, mkt.get("last_update")))
                 else:
                     fair = devig_probs(probs, "power")
                     fair_m = devig_probs(probs, "multiplicative")
@@ -136,7 +142,8 @@ def snapshot_pinnacle(conn, hours: int = 48) -> int:
                     for o, rp, fp, fm in zip(outs, probs, fair, fair_m):
                         rows.append((ts, "odds_api", bm["key"], ev["id"], label,
                                      mkt["key"], o["name"], o.get("point"),
-                                     o["price"], rp, fp, fm, div))
+                                     o["price"], rp, fp, fm, div,
+                                     mkt.get("last_update")))
 
     _insert(conn, rows)
     books = {r[2] for r in rows}

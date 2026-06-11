@@ -32,11 +32,21 @@ market anchors, and simulation. Priority order:
 - Free: eloratings.net national Elo. Blend weight small (SPEC: w 0.85-0.95
   on market) — only matters for thin/alpha markets and futures.
 
-## 4. Historical odds calibration (NOT YET RUN — ~640 credits)
-- /historical endpoints, WC2022 group+knockout closers (h2h_3_way, eu):
-  power vs multiplicative vs shin devig Brier vs outcomes; per-book closing
-  accuracy. Settles devig method + informs BOOK_WEIGHTS empirically.
-- Extend to totals/btts closers (+~600 credits) for prop-adjacent markets.
+## 4. Historical odds calibration (NOT YET RUN — redesigned 2026-06-11)
+User direction: recent matches over WC2022 (3.5y stale, n=64 too small to
+separate devig methods; book microstructure has drifted). Two tiers:
+- FREE bulk tier: football-data.co.uk CSVs — Pinnacle closing 3-way odds +
+  results, thousands of recent club matches (EPL/UCL/etc), zero credits.
+  Settles power vs multiplicative vs shin at real sample size.
+- Odds API historical tier (10x cost, spend where source-identical matters):
+  Euro 2024 (51) + Copa America 2024 (32) + 2024-25 WC qualifiers/Nations
+  League through OUR exact pipeline — same Pinnacle scrape/delay, same
+  exchange quotes, same parser. Per-book closing accuracy beyond Pinnacle,
+  international-match level check vs the club-data baseline.
+- Results source for internationals: FBref/fixturedownload (historical
+  /scores only reaches 3 days back).
+- Extend to totals/btts closers for prop-adjacent calibration if tier-1
+  shows method choice matters there.
 
 ## 5. derive.py — productionize alpha derivations
 - Tonight's inline scripts (skellam corner/SOT races, poisson card/team-goal

@@ -50,8 +50,9 @@ BOOK_WEIGHTS: dict[str, float] = {
     "kalshi": 1.5,            # our own data, liquid near kickoff
     "matchbook": 0.5,         # exchange echo of betfair — low extra info
     "smarkets": 0.5,
-    "draftkings": 1.0,        # props leader (16 prop markets on opener)
-    "fanduel": 1.0,           # props
+    # draftkings excluded from fair value (user call, 2026-06-11) — retail
+    # book; its 16 prop markets still snapshot for coverage/crowd reference.
+    "fanduel": 1.0,           # props coverage (user wants it for props)
     "betonlineag": 1.0,       # sharp-ish offshore
     "betanysports": 0.75,     # reduced-juice shop
     "onexbet": 0.75,          # big grey book, decent soccer

@@ -1,0 +1,60 @@
+"""Question->market mapping and consensus math."""
+
+from datetime import datetime, timezone
+
+import db as dbmod
+from forecast import consensus, map_question
+
+
+def test_h2h_mapping_with_alias():
+    assert map_question("Will Mexico win the match?", "h2h",
+                        "Mexico", "South Africa") == ("h2h", "Mexico", None)
+    assert map_question("Will United States win the match?", "h2h",
+                        "USA", "Paraguay") == ("h2h", "USA", None)
+    assert map_question("Will the match end in a draw?", "h2h",
+                        "Mexico", "South Africa") == ("h2h", "Draw", None)
+
+
+def test_totals_mapping_thresholds():
+    assert map_question("Will the match have 2 or fewer total goals?", "totals",
+                        "A", "B") == ("totals", "Under", 2.5)
+    assert map_question("Will the match have 3 or more total goals?", "totals",
+                        "A", "B") == ("totals", "Over", 2.5)
+
+
+def test_half_and_team_totals():
+    assert map_question("Will the second half have 2 or more total goals?",
+                        "totals_half", "A", "B") == ("totals_h2", "Over", 1.5)
+    assert map_question("Will Qatar score at least 1 goal?", "team_totals",
+                        "Qatar", "Switzerland") == ("team_totals", "Qatar Over", 0.5)
+
+
+def test_btts_combo_never_maps_to_plain_btts():
+    assert map_question("Will both teams score AND the match have 3 or more "
+                        "total goals?", "btts", "A", "B") is None
+
+
+def test_consensus_weights_and_min_books():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    ts = now.isoformat()
+    rows = [
+        (ts, "odds_api", "pinnacle", "M1", "x", "h2h", "Mexico", None,
+         None, 0.72, 0.70, 0.71, 0.5, ts),
+        (ts, "odds_api", "betfair_ex_uk", "M1", "x", "h2h", "Mexico", None,
+         None, 0.71, 0.69, 0.69, 0.1, ts),
+        (ts, "odds_api", "skybet", "M1", "x", "h2h", "Mexico", None,
+         None, 0.80, 0.78, 0.78, 0.2, ts),  # soft book: weight 0, excluded
+    ]
+    conn.executemany(
+        """INSERT INTO market_snapshots
+           (ts, source, book, match_id, event_label, market, outcome, point,
+            raw_price, raw_prob, fair_prob, fair_prob_mult, divergence_pts, quote_ts)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", rows)
+    prob, n, detail = consensus(conn, "M1", "h2h", "Mexico", None, now)
+    assert n == 2                       # skybet excluded by zero weight
+    # pinnacle 3.0 x 0.70 + betfair 2.5 x 0.69 over 5.5
+    assert abs(prob - (3.0 * 0.70 + 2.5 * 0.69) / 5.5) < 1e-9
+
+    prob2, n2, _ = consensus(conn, "M1", "h2h", "Draw", None, now)
+    assert prob2 is None and n2 == 0    # no quotes -> refuse, don't guess

@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 
 import db
 import bookmaker_client
-from config import CORE_MARKETS, PINNACLE_REGION, SPORT_KEY
+from config import SPORT_KEY
 from devig import american_to_prob, decimal_to_prob, devig_probs, devig_three_way
 from odds_client import OddsClient
 
@@ -101,7 +101,20 @@ def snapshot_bookmaker(conn) -> int:
 # Pinnacle via The Odds API (rationed)
 # --------------------------------------------------------------------------
 
-def snapshot_pinnacle(conn, hours: int = 48) -> int:
+def snapshot_pinnacle(conn, hours: int = 48, markets: str = "",
+                      regions: str = "") -> int:
+    """Snapshot whitelisted-book odds for matches inside the window.
+
+    Default markets cover tonight's submittable set; regions eu,uk,us span
+    the whitelist (pinnacle/eu, betfair_ex_uk+matchbook+smarkets/uk,
+    dk+fd+betonline/us). Cost = markets x regions per call.
+    """
+    # Featured markets (h2h/totals) come from the BULK endpoint: one call
+    # covers every event. Additional markets (team_totals, totals_h2, btts,
+    # props) are ONLY served by the per-event endpoint (bulk returns 422).
+    featured = markets or "h2h,totals"
+    additional = "team_totals,totals_h2"
+    regions = regions or "eu,uk,us"
     ts = _now()
     horizon = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
     match_ids = [r["match_id"] for r in conn.execute(
@@ -112,8 +125,11 @@ def snapshot_pinnacle(conn, hours: int = 48) -> int:
         return 0
 
     client = OddsClient(conn)
-    events = client.odds(SPORT_KEY, CORE_MARKETS, PINNACLE_REGION,
-                         event_ids=match_ids)
+    events = client.odds(SPORT_KEY, featured, regions, event_ids=match_ids)
+    for mid in match_ids:
+        ev_extra = client.event_odds(SPORT_KEY, mid, additional, regions)
+        if ev_extra.get("bookmakers"):
+            events.append(ev_extra)
     rows: list[tuple] = []
     for ev in events:
         label = f"{ev['away_team']} vs {ev['home_team']}"
@@ -135,15 +151,28 @@ def snapshot_pinnacle(conn, hours: int = 48) -> int:
                                      decimal_to_prob(o["price"]), fp, fm,
                                      tw.divergence_pts, mkt.get("last_update")))
                 else:
-                    fair = devig_probs(probs, "power")
-                    fair_m = devig_probs(probs, "multiplicative")
-                    div = round(max(abs(a - b) for a, b in zip(fair, fair_m)) * 100, 3) \
-                        if fair else 0.0
-                    for o, rp, fp, fm in zip(outs, probs, fair, fair_m):
-                        rows.append((ts, "odds_api", bm["key"], ev["id"], label,
-                                     mkt["key"], o["name"], o.get("point"),
-                                     o["price"], rp, fp, fm, div,
-                                     mkt.get("last_update")))
+                    # Markets like team_totals/alternate_totals lump several
+                    # independent 2-way books into one outcomes list. Devig
+                    # within (description, point) groups, never across them.
+                    groups: dict[tuple, list] = {}
+                    for o in outs:
+                        groups.setdefault(
+                            (o.get("description"), o.get("point")), []).append(o)
+                    for (desc, point), grp in groups.items():
+                        gprobs = [decimal_to_prob(o["price"]) for o in grp]
+                        if len(grp) >= 2:
+                            fair = devig_probs(gprobs, "power")
+                            fair_m = devig_probs(gprobs, "multiplicative")
+                            div = round(max(abs(a - b)
+                                        for a, b in zip(fair, fair_m)) * 100, 3)
+                        else:
+                            fair, fair_m, div = gprobs, gprobs, -1.0  # unpaired: raw
+                        for o, rp, fp, fm in zip(grp, gprobs, fair, fair_m):
+                            outcome = (f"{desc} {o['name']}" if desc else o["name"])
+                            rows.append((ts, "odds_api", bm["key"], ev["id"], label,
+                                         mkt["key"], outcome, point,
+                                         o["price"], rp, fp, fm, div,
+                                         mkt.get("last_update")))
 
     _insert(conn, rows)
     books = {r[2] for r in rows}

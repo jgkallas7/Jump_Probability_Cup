@@ -15,6 +15,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from datetime import datetime, timedelta, timezone
@@ -23,6 +24,65 @@ import db
 from config import (BOOK_WEIGHTS, DEFAULT_BOOK_WEIGHT,
                     THIN_MARKET_EXTRA_WEIGHTS, THIN_MARKET_PREFIXES)
 from devig import shrink_extremes
+
+# Kalshi WC crowd-mid blend (gated). Validation (2026-06-16): Kalshi goal-totals
+# match the sharp book to 0.6pt (redundant but confirming); corner-totals run
+# +5-7pt above book (real divergence) — so Kalshi is a conservative BLEND that
+# nudges, never an override. Book stays primary. Guarded: any failure -> no blend.
+KALSHI_ON = os.environ.get("WC_KALSHI", "") == "1"
+# Half goal-totals blend (KXWC1HTOTAL/2HTOTAL) — targets the losing totals_half
+# bucket (-22.7 vs field). Separate flag, default OFF: WC_KALSHI is already live,
+# so this new behavior must forward-validate before it changes what we send.
+KALSHI_HTOTAL_ON = os.environ.get("WC_KALSHI_HTOTAL", "") == "1"
+KALSHI_BLEND_W = 0.35
+
+# Confidence dampener (default OFF, WC_DEVCAP): pull h2h (match-winner / draw)
+# submissions toward 0.5 by DEVCAP_BETA. Per-bucket settled test (2026-06-20):
+# h2h gains strongly from shrink (our match-outcome confidence runs ahead of the
+# realized upset/draw rate: +47 over 27 Qs at heavy shrink), while SOT props and
+# the NO_MARKET alpha do NOT — their losses are directional, not overconfidence,
+# so shrink hurts them (b=0 best). beta=0.25 is the conservative slice (the in-
+# sample optimum ~0.6 overfits a matchday-1 upset run). SHIP OFF — forward-
+# validate on settled h2h via parse_locked before enabling in morning.sh.
+DEVCAP_ON = os.environ.get("WC_DEVCAP", "") == "1"
+DEVCAP_BETA = 0.25
+DEVCAP_MARKETS = ("h2h",)
+_K_CLIENT = None
+_K_BOOK: dict[tuple, dict] = {}
+
+
+def combine_kalshi(book_prob, kalshi_mid, w=KALSHI_BLEND_W):
+    """Resolve book consensus + Kalshi mid -> (consensus_rec, final_preshrink,
+    blend_w, dev_reason, dev_bps). Three cases:
+      book only  (no Kalshi)      -> book, w=1.0
+      rescue     (no book)        -> Kalshi as sole source, w=0.0
+      blend      (both)           -> book primary, nudged toward Kalshi by w
+    Pure (no shrink/IO) so it's unit-testable."""
+    if kalshi_mid is None:
+        return book_prob, book_prob, 1.0, None, 0
+    if book_prob is None:
+        return kalshi_mid, kalshi_mid, 0.0, f"kalshi only (no book) mid={kalshi_mid:.3f}", 0
+    blended = (1 - w) * book_prob + w * kalshi_mid
+    return (book_prob, blended, 1 - w,
+            f"kalshi blend w={w} mid={kalshi_mid:.3f}",
+            round((blended - book_prob) * 10000))
+
+
+def _kalshi_mid(home, away, date, text):
+    global _K_CLIENT
+    try:
+        import kalshi_wc
+        if _K_CLIENT is None:
+            _K_CLIENT = kalshi_wc.KalshiRO()
+        key = (home, away, date)
+        if key not in _K_BOOK:
+            _K_BOOK[key] = kalshi_wc.match_book(_K_CLIENT, home, away, date,
+                                                extras=KALSHI_HTOTAL_ON)
+        res = kalshi_wc.price_question(text, _K_BOOK[key])
+        return res[0] if res else None
+    except Exception:
+        return None
+
 
 MIN_BOOKS = 2          # never forecast off a single book...
 SOLO_BOOK_MIN_WEIGHT = 2.0  # ...unless it's a heavyweight sharp (pinnacle/betfair)
@@ -87,6 +147,15 @@ def map_question(text: str, mapping: str, home: str, away: str):
             if direction in ("fewer", "less"):
                 return (half, "Under", n + 0.5)
             return (half, "Over", n - 0.5)
+        return None
+
+    if mapping in ("alternate_totals_corners", "alternate_totals_cards"):
+        # "Will there be N or more total corner kicks/cards?" -> match Over (N-0.5).
+        # Books quote these match totals as Over/Under (no team side).
+        unit = "corner kicks" if mapping.endswith("corners") else "cards"
+        m = re.search(rf"(\d+) or more total {unit}", t, re.I)
+        if m:
+            return (mapping, "Over", int(m.group(1)) - 0.5)
         return None
 
     if mapping == "team_totals":
@@ -244,15 +313,28 @@ def run(conn, hours: float = 36) -> list[dict]:
             continue
         market, outcome, point = target
         prob, n, detail = consensus(conn, q["match_id"], market, outcome, point, now)
-        if prob is None:
+        km = _kalshi_mid(q["home"], q["away"], (q["kickoff_utc"] or "")[:10],
+                         q["text"]) if KALSHI_ON else None
+        if prob is None and km is None:
             skipped.append((q["text"], f"{detail} ({market}/{outcome}/{point})"))
             continue
-        final = shrink_extremes(prob)
+        # book-only / conservative-blend / Kalshi-rescue (see combine_kalshi)
+        consensus_rec, pre, blend_w, dev_reason, dev_bps = combine_kalshi(prob, km)
+        final = shrink_extremes(pre)
+        if DEVCAP_ON and market in DEVCAP_MARKETS:
+            damped = (1 - DEVCAP_BETA) * final + DEVCAP_BETA * 0.5
+            dev_reason = (f"{dev_reason} | " if dev_reason else "") + \
+                f"devcap {market} {final:.3f}->{damped:.3f}"
+            final = damped
+            dev_bps = round((final - consensus_rec) * 10000)
+        if prob is None:                             # rescued — Kalshi is the source
+            n, detail = 0, {"kalshi": round(km, 4)}
         conn.execute("""
             INSERT INTO forecasts(qid, ts, consensus_prob, blend_w, final_prob,
                                   deviation_bps, deviation_reason)
-            VALUES (?,?,?,?,?,0,NULL)""",
-            (q["qid"], ts, round(prob, 5), 1.0, round(final, 5)))
+            VALUES (?,?,?,?,?,?,?)""",
+            (q["qid"], ts, round(consensus_rec, 5), blend_w, round(final, 5),
+             dev_bps, dev_reason))
         sheet.append({"qid": q["qid"], "text": q["text"],
                       "match": f"{q['home']} vs {q['away']}",
                       "kickoff": q["kickoff_utc"],

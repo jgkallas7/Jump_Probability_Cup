@@ -28,8 +28,10 @@ Base: `https://api.sportspredict.com/api/v1` · Bearer `sp_live_*` key
 1. `GET /events` → Probability Cup event id (`type: "probability"`)
 2. `GET /lobbies?event_id=` → single shared lobby; `POST /lobbies/{id}/join` once
 3. `GET /matches?event_id=&lobby_id=` → matches with `open_market_count`,
-   `opening_time`, `closing_time` (treat closing_time per market as the
-   deadline of record, not kickoff folklore)
+   `opening_time`, `closing_time`. Predictions lock at `opening_time`
+   (= kickoff; confirmed 2026-06-12 by the "locked predictions" email
+   arriving at kickoff). `closing_time` is the expected final whistle —
+   NOT the prediction deadline; never assume in-play revision works.
 4. `GET /markets?lobby_id=&match_id=` → binary questions (~10/match)
 5. `POST /predictions/batch` early defaults → `PATCH` near close with
    final odds + lineups

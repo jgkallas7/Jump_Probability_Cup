@@ -8,6 +8,26 @@ LOG="/home/jgkal/wc_logs/morning.log"
 mkdir -p /home/jgkal/wc_logs
 cd "$REPO"
 
+# Counted-rate quant pricer for alpha (NO_MARKET) questions. Enabled after a
+# CLEAN no-look-ahead OOS (evaluate_qmodel.py --prior-only): clean qmodel beat
+# what we send (+3.6) and forward use is look-ahead-free (price time only sees
+# prior games). Team-rate edge grows as the tournament progresses. Refresh the
+# rate feed first so qmodel prices off current data; revalidate per task #9.
+export WC_QMODEL=1
+# Kalshi WC crowd mids: BLEND into book totals/corners (book stays primary; goal
+# totals validated to 0.6pt vs sharp line, corners +5-7pt so blended not
+# overridden) and RESCUE book-mapped Qs the sportsbook can't price. Guarded —
+# any Kalshi failure leaves book pricing untouched.
+export WC_KALSHI=1
+# Half goal-totals (Kalshi KXWC1HTOTAL/2HTOTAL -> totals_half bucket).
+# DISABLED 2026-06-20: was flipped on 06-16 ahead of its own gate — "validated"
+# only vs the full-match Kalshi ladder (another Kalshi number), never against a
+# sharp sportsbook half line or settled-results OOS, and totals_half was the
+# worst bucket (-22.7 vs field). Re-enable ONLY after parse_locked shows the
+# totals_half bucket improving on SETTLED questions (or a sportsbook cross-check).
+export WC_KALSHI_HTOTAL=0
+$PY team_rates.py refresh >/dev/null 2>&1 || echo "team_rates refresh failed (qmodel falls back to prior)"
+
 {
   echo "===== morning $(date -u +%FT%H:%M) ====="
   # surface any overnight failures FIRST
@@ -27,6 +47,12 @@ cd "$REPO"
   $PY forecast.py --hours 30 | head -50
   $PY submit.py submit --hours 30
   $PY derive.py --hours 30 --submit
+  # INSURANCE NET (last): family base-rate placeholders for anything still
+  # unpriced after forecast+derive. A blank scores 0 relative points (the worst
+  # field-relative outcome); a placeholder is ~break-even. Fills gaps only —
+  # never revises a real forecast (it skips already-submitted qids).
+  $PY placeholders.py --submit --hours 30
+  $PY -c "import db, sheet; sheet.write_for_window(db.connect(), hours=30, push=False)"
   # loud flag for the derive.py gap: alpha questions due today w/o submission
   $PY - <<'EOF'
 import db
@@ -42,4 +68,8 @@ print(f"ALPHA GAP: {n} questions due within 30h have no submission" if n
 last = conn.execute("SELECT used, remaining FROM credit_log ORDER BY id DESC LIMIT 1").fetchone()
 if last: print(f"credits: {last['used']} used, {last['remaining']} remaining")
 EOF
+  # DISCOVERY loop: regenerate the ranked opportunity backlog (unused markets,
+  # unwired Kalshi series, buckets losing vs field) for the improvement agent.
+  echo "----- opportunities (audit.py) -----"
+  $PY audit.py | tail -n +5
 } >> "$LOG" 2>&1

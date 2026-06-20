@@ -16,15 +16,93 @@ submitted ones whose derived value moved >= ALPHA_REVISE_PTS.
 from __future__ import annotations
 
 import math
+import os
 import re
 import sys
 from datetime import datetime, timedelta, timezone
 
 import db
+from config import BOOK_WEIGHTS, DEFAULT_BOOK_WEIGHT, THIN_MARKET_EXTRA_WEIGHTS
 from devig import shrink_extremes
-from forecast import consensus, resolve_team
+from forecast import MAX_SNAP_AGE_MIN, consensus, resolve_team
 
 ALPHA_REVISE_PTS = 3   # alpha derivations churn more than book consensus
+
+# Counted-rate quant pricer (qmodel + FBref team_rates). OFF by default: the
+# backtest that favours it (evaluate_qmodel.py, +258 vs +78) still has rate
+# look-ahead, and the shrink-lesson above mandates a CLEAN out-of-sample check
+# before any change reaches live submission. Flip WC_QMODEL=1 once a forward
+# match day confirms the edge. Disabled buckets stay on the handlers below.
+QMODEL_ON = os.environ.get("WC_QMODEL", "") == "1"
+QMODEL_DISABLED_PREFIXES = ("team SOT",)   # n=1, regressed OOS — keep on derive
+_QM_RATES = None
+_QM_LAM: dict[str, tuple] = {}
+
+# Kalshi WC live crowd mids (kalshi_wc). OFF by default — external dependency,
+# and like qmodel it wants a forward validation before live. When on, it takes
+# PRIORITY for the buckets it covers (corners/totals/score-or-assist): a
+# real-money prediction-market mid is the closest live proxy to the SP field.
+KALSHI_ON = os.environ.get("WC_KALSHI", "") == "1"
+_KALSHI_CLIENT = None
+_KALSHI_BOOK: dict[str, dict] = {}
+
+
+def _kalshi_price(conn, m, text):
+    """Try a live Kalshi mid for this question. Fully guarded — any failure
+    (auth, network, no market) returns None and the pipeline proceeds."""
+    global _KALSHI_CLIENT
+    try:
+        import kalshi_wc
+        if _KALSHI_CLIENT is None:
+            _KALSHI_CLIENT = kalshi_wc.KalshiRO()
+        mid = m["match_id"]
+        if mid not in _KALSHI_BOOK:
+            row = conn.execute("SELECT kickoff_utc FROM matches WHERE match_id=?",
+                               (mid,)).fetchone()
+            date = (row["kickoff_utc"] or "")[:10] if row else ""
+            _KALSHI_BOOK[mid] = kalshi_wc.match_book(
+                _KALSHI_CLIENT, m["home"], m["away"], date) if date else {}
+        res = kalshi_wc.price_question(text, _KALSHI_BOOK[mid])
+        if res is None:
+            return None
+        prob, reason = res
+        return prob, "kalshi", reason
+    except Exception:
+        return None
+
+
+def _qmodel_price(conn, m, text, now):
+    """Try the counted-rate pricer; return (prob, tier, reason) or None.
+    Caches the rate table once and the goal lambdas per match."""
+    global _QM_RATES
+    import qmodel
+    import team_rates
+    if _QM_RATES is None:
+        try:
+            _QM_RATES = team_rates.build_rates()
+        except Exception:
+            _QM_RATES = {}
+    mid = m["match_id"]
+    if mid not in _QM_LAM:
+        _QM_LAM[mid] = match_lambdas(conn, m, now)
+    res = qmodel.price_question(text, m["home"], m["away"], _QM_RATES, _QM_LAM[mid])
+    if res is None:
+        return None
+    prob, reason = res
+    if any(reason.startswith(p) for p in QMODEL_DISABLED_PREFIXES):
+        return None
+    return prob, "qmodel", reason
+
+# LESSON (2026-06-14): a blanket alpha shrink-toward-0.5 (λ=0.5) was tried and
+# REVERTED. It looked great IN-SAMPLE — a locked-email backtest over the first 4
+# settled matches (parse_locked.py) put the realized-points optimum at λ=0.5.
+# But the first OUT-OF-SAMPLE match it went live on (Brazil-Morocco) the shrink
+# cost ~26 alpha points: our calls there were good and confident, and pulling
+# them toward 50 threw that away. Re-sweeping λ over all 32 settled alpha
+# questions then moved the optimum to λ≈0.9–1.0 (i.e. no shrink). The alpha
+# signal is NOT uniformly noise — uniform shrinkage discards the good days. Do
+# not re-add a blanket shrink; any future shrink must be per-question (keyed to
+# a real confidence signal) and validated OUT-OF-SAMPLE before going live.
 
 # ---- base rates: UNVERIFIED (ROADMAP #1 replaces with counted data) ----
 BASE = {
@@ -59,6 +137,13 @@ def skellam_gt(la: float, lb: float, n: int = 40) -> float:
     pa = [pois_pmf(la, k) for k in range(n)]
     pb = [pois_pmf(lb, k) for k in range(n)]
     return sum(pa[i] * sum(pb[:i]) for i in range(1, n))
+
+
+def skellam_geq(la: float, lb: float, m: int, n: int = 40) -> float:
+    """P(A - B >= m) for independent Poissons; m may be negative."""
+    pa = [pois_pmf(la, k) for k in range(n)]
+    pb = [pois_pmf(lb, k) for k in range(n)]
+    return sum(pa[i] * pb[j] for i in range(n) for j in range(n) if i - j >= m)
 
 
 def lam_from_over(p_over: float, line: float) -> float:
@@ -117,20 +202,32 @@ def corners_lambda(conn, m, now):
 
 
 def corner_share(conn, m, team, now):
-    """Team's corner share: corner spread devig when quoted, else supremacy
-    fallback (style caveat — corners track style, not strength)."""
-    p_race = mprob(conn, m["match_id"], "alternate_spreads_corners", team,
-                   -0.5, now)
+    """Team's corner share from the corner-spread ladder: devig every quoted
+    half-line, invert each through the skellam to an implied share, take the
+    median. Books ladder lines around the expected margin, so no single point
+    (e.g. -0.5) is reliably quoted — game one bug: Pinnacle quoted -1.5..-3.5,
+    we read only -0.5, fell back, submitted 48 vs field 65 on a YES.
+    Supremacy fallback only when no spread is quoted at all (style caveat —
+    corners track style, not strength)."""
     lam, _ = corners_lambda(conn, m, now)
-    if p_race is not None:
+    shares = []
+    for pt in (-4.5, -3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5, 4.5):
+        p_cover = mprob(conn, m["match_id"], "alternate_spreads_corners",
+                        team, pt, now)
+        if p_cover is None:
+            continue
+        need = math.ceil(-pt)  # team covers pt iff corner margin >= need
         lo, hi = 0.25, 0.75
         for _ in range(40):
             s = (lo + hi) / 2
-            if skellam_gt(lam * s, lam * (1 - s)) > p_race:
+            if skellam_geq(lam * s, lam * (1 - s), need) > p_cover:
                 hi = s
             else:
                 lo = s
-        return s, "derived"
+        shares.append(s)
+    if shares:
+        shares.sort()
+        return shares[len(shares) // 2], "derived"
     p_win = mprob(conn, m["match_id"], "h2h", team, None, now) or 0.5
     return 0.5 + 0.20 * (p_win - 0.5) / 0.5 * 0.5, "anchored-supremacy"
 
@@ -318,7 +415,58 @@ def h_first_goal_h2(m, g, conn, now):
     return share * p_any, "derived", f"first 2H goal share={share:.3f}"
 
 
+# One-sided player markets carry full vig (no opposite side to devig against),
+# flagged divergence_pts == -1 on the tape; the haircut approximates a one-sided
+# devig (anytime-scorer / assist margins run ~7-10%).
+PLAYER_ONE_SIDED_HAIRCUT = {"player_goal_scorer_anytime": 0.93, "player_assists": 0.90}
+
+
+def _player_prob(conn, match_id, market, player, suffix, now):
+    """Weighted consensus that a player hits the `suffix` side ('Yes' for
+    anytime-scorer, 'Over' for assists). Matches name TOKENS, since book name
+    orders differ ('Heung-Min Son' vs 'Son Heung-min'). Returns prob or None.
+    Mirrors forecast.consensus weighting (whitelist + thin-market extras)."""
+    tokens = [x for x in re.split(r"[\s\-]+", player.strip()) if len(x) > 2]
+    if not tokens:
+        return None
+    clause = " AND ".join(["outcome LIKE ?"] * len(tokens)) + " AND outcome LIKE ?"
+    cutoff = (now - timedelta(minutes=MAX_SNAP_AGE_MIN)).isoformat()
+    params = [match_id, market] + [f"%{t}%" for t in tokens] + [f"% {suffix}", cutoff]
+    rows = conn.execute(f"""
+        SELECT book, fair_prob, divergence_pts, MAX(ts) ts FROM market_snapshots
+        WHERE match_id = ? AND market = ? AND {clause} AND ts >= ?
+        GROUP BY book""", params).fetchall()
+    weights = dict(BOOK_WEIGHTS)
+    for b, w in THIN_MARKET_EXTRA_WEIGHTS.items():
+        weights.setdefault(b, w)
+    hc = PLAYER_ONE_SIDED_HAIRCUT.get(market, 1.0)
+    wsum = psum = 0.0
+    for r in rows:
+        w = weights.get(r["book"], DEFAULT_BOOK_WEIGHT)
+        if w <= 0:
+            continue
+        p = r["fair_prob"] * (hc if r["divergence_pts"] == -1.0 else 1.0)
+        wsum += w
+        psum += w * p
+    return psum / wsum if wsum > 0 else None
+
+
+def h_score_or_assist(m, g, conn, now):
+    """"Will X score or assist?" — union of anytime-scorer and assist markets
+    we already snapshot. Independence approx (slightly high under +correlation,
+    but far sharper than a base rate). Needs at least one side quoted."""
+    player = g.group(1)
+    ps = _player_prob(conn, m["match_id"], "player_goal_scorer_anytime", player, "Yes", now)
+    pa = _player_prob(conn, m["match_id"], "player_assists", player, "Over", now)
+    if ps is None and pa is None:
+        return None
+    ps, pa = ps or 0.0, pa or 0.0
+    p = 1 - (1 - ps) * (1 - pa)
+    return p, "derived-mkt", f"score|assist 1-(1-{ps:.2f})(1-{pa:.2f})"
+
+
 HANDLERS = [
+    (r"Will (.+?) score or assist a goal", h_score_or_assist),
     (r"Will (.+?) be caught offside (\d+) or more", h_offside),
     (r"Will (.+?) score AND the match have (\d+) or more total goals",
      h_team_score_and_total),
@@ -359,6 +507,14 @@ def h_btts_and_total(m, k, conn, now):
 def derive_question(conn, q, now):
     text = q["text"]
     m = {"match_id": q["match_id"], "home": q["home"], "away": q["away"]}
+    if KALSHI_ON:
+        kp = _kalshi_price(conn, m, text)
+        if kp is not None:
+            return kp
+    if QMODEL_ON:
+        qm = _qmodel_price(conn, m, text, now)
+        if qm is not None:
+            return qm
     g = re.search(r"Will both teams score AND the match have (\d+) or more", text)
     if g:
         return h_btts_and_total(m, int(g.group(1)), conn, now)

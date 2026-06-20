@@ -34,6 +34,58 @@ def test_btts_combo_never_maps_to_plain_btts():
                         "total goals?", "btts", "A", "B") is None
 
 
+def test_match_total_corner_card_mapping():
+    # "N or more" -> match Over (N-0.5); books quote these as match totals.
+    assert map_question("Will there be 9 or more total corner kicks?",
+                        "alternate_totals_corners", "A", "B") == \
+        ("alternate_totals_corners", "Over", 8.5)
+    assert map_question("Will there be 4 or more total cards shown?",
+                        "alternate_totals_cards", "A", "B") == \
+        ("alternate_totals_cards", "Over", 3.5)
+
+
+def test_team_and_half_corner_totals_stay_unmapped():
+    from ingest_questions import classify
+    # team corner total: no book market -> NO_MARKET (priced by derive)
+    assert classify("Will Morocco have 5 or more corner kicks?")[1] == "NO_MARKET"
+    # half-qualified total: no 2nd-half totals market -> NO_MARKET
+    assert classify("Will there be 5 or more total corner kicks in the "
+                    "second half?")[1] == "NO_MARKET"
+    # but the plain match totals DO map now
+    assert classify("Will there be 9 or more total corner kicks?")[1] == \
+        "alternate_totals_corners"
+    assert classify("Will there be 4 or more total cards shown?")[1] == \
+        "alternate_totals_cards"
+
+
+def test_score_or_assist_union_from_player_markets():
+    import re
+    from derive import h_score_or_assist
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    ts = now.isoformat()
+
+    def snap(market, outcome, point, fair):
+        conn.execute(
+            """INSERT INTO market_snapshots
+               (ts, source, book, match_id, event_label, market, outcome, point,
+                raw_price, raw_prob, fair_prob, fair_prob_mult, divergence_pts, quote_ts)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (ts, "odds_api", "pinnacle", "M1", "x", market, outcome, point,
+             None, fair, fair, fair, -1.0, ts))  # div=-1 -> one-sided, haircut applies
+
+    snap("player_goal_scorer_anytime", "Vinicius Junior Yes", None, 0.40)
+    snap("player_assists", "Vinicius Junior Over", 0.5, 0.20)
+    g = re.search(r"Will (.+?) score or assist a goal",
+                  "Will Vinicius Junior score or assist a goal (excluding own goals)?")
+    m = {"match_id": "M1", "home": "Brazil", "away": "Morocco"}
+    p, tier, _ = h_score_or_assist(m, g, conn, now)
+    # haircuts: score 0.40*0.93, assist 0.20*0.90; union = 1-(1-s)(1-a)
+    expected = 1 - (1 - 0.40 * 0.93) * (1 - 0.20 * 0.90)
+    assert abs(p - expected) < 1e-9
+    assert tier == "derived-mkt"
+
+
 def test_consensus_weights_and_min_books():
     conn = dbmod.init(":memory:")
     now = datetime.now(timezone.utc)

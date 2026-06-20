@@ -115,7 +115,10 @@ def snapshot_pinnacle(conn, hours: int = 48, markets: str = "",
     featured = markets or "h2h,totals"
     additional = ("team_totals,totals_h1,totals_h2,team_totals_h1,"
                   "alternate_team_totals_h2,alternate_spreads_cards,"
-                  "alternate_spreads_corners,h2h_3_way_h1,h2h_3_way_h2,"
+                  "alternate_spreads_corners,alternate_totals_corners,"
+                  "alternate_totals_cards,alternate_totals_corners_h1,"
+                  "btts,player_assists,player_assists_alternate,"
+                  "h2h_3_way_h1,h2h_3_way_h2,"
                   "player_goal_scorer_anytime,player_shots_on_target")
     regions = regions or "eu,uk,us"
     ts = _now()

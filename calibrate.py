@@ -33,8 +33,13 @@ def _norm_prob(p: float) -> float:
     return p / 100.0 if p > 1 else p
 
 
-def _derive_outcome(submitted_prob: float, brier: float) -> int:
-    """API gives brier=(p-o)^2; pick o in {0,1} consistent with it."""
+def _derive_outcome(submitted_prob: float, brier: float) -> int | None:
+    """API gives brier=(p-o)^2 but no explicit outcome; pick o in {0,1}
+    consistent with it. At p==0.50 both outcomes give brier=0.25, so the brier
+    carries NO information — refuse to guess (return None) rather than coin-flip
+    a wrong outcome into the calibration ground truth."""
+    if abs(submitted_prob - 0.5) < 0.005:
+        return None
     return 1 if abs((submitted_prob - 1) ** 2 - brier) < abs(submitted_prob ** 2 - brier) else 0
 
 
@@ -43,13 +48,25 @@ def cmd_sync(conn) -> None:
     c = SPClient()
     results = c.results(_lobby(conn))
     n_new = 0
+    n_skip = 0
     for r in results:
         if r.get("brier_score") is None:
             continue
         qid = r["market_id"] if "market_id" in r else r.get("id")
-        p = _norm_prob(float(r.get("probability_submitted") or 0))
+        # canonical submitted prob: our OWN stored value (always 0-1 decimal)
+        # beats the API read-back, whose format drifts int(1-99)/decimal and
+        # misreads a submitted 1 (=1%) as 1.0 (=100%) via the p>1 heuristic.
+        row = conn.execute(
+            "SELECT submitted_prob FROM forecasts WHERE qid=? AND "
+            "submitted_prob IS NOT NULL ORDER BY submitted_at DESC LIMIT 1",
+            (qid,)).fetchone()
+        p = row["submitted_prob"] if row else \
+            _norm_prob(float(r.get("probability_submitted") or 0))
         brier = float(r["brier_score"])
         outcome = _derive_outcome(p, brier)
+        if outcome is None:        # p==0.50: brier can't disambiguate — skip
+            n_skip += 1
+            continue
         stage = conn.execute(
             "SELECT m.stage FROM questions q JOIN matches m USING(match_id) "
             "WHERE q.qid=?", (qid,)).fetchone()
@@ -64,7 +81,8 @@ def cmd_sync(conn) -> None:
             n_new += 1
         conn.execute("UPDATE questions SET status='settled' WHERE qid=?", (qid,))
     conn.commit()
-    print(f"synced {len(results)} settled results ({n_new} rows upserted)")
+    print(f"synced {len(results)} settled results ({n_new} rows upserted"
+          + (f", {n_skip} skipped @p=0.50 — outcome underivable)" if n_skip else ")"))
 
 
 def _closing_book_prob(conn, qid: str) -> dict[str, float]:

@@ -28,6 +28,13 @@ QTYPE_RULES: list[tuple[str, str, str]] = [
      r"(corner|card).*(first half|second half)", "prop", "NO_MARKET"),
     (r"(receive|be shown) more cards than", "cards_spread", "alternate_spreads_cards"),
     (r"(have|finish with) more corner kicks than", "corners_spread", "alternate_spreads_corners"),
+    # Match (not team, not half) corner/card totals: books quote these as
+    # match Over/Under (alternate_totals_corners/_cards, 8/5 books) — we already
+    # snapshot them, so price from consensus instead of base-rate. Half-qualified
+    # variants were caught above (no 2nd-half totals market); team totals
+    # ("<team> have N corners") have no book market and fall through to NO_MARKET.
+    (r"\d+ or more total corner kicks", "corners_total", "alternate_totals_corners"),
+    (r"\d+ or more total cards", "cards_total", "alternate_totals_cards"),
     (r"(corner|card|booking|foul|penalt|free kick|offside)", "prop", "NO_MARKET"),
     (r"shots? on target.*(first|second) half|"
      r"(halftime|first half|second half).*shots? on target", "prop", "NO_MARKET"),

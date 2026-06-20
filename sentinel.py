@@ -79,6 +79,13 @@ def main() -> None:
         ("revise", lambda: submit.cmd_revise(conn, hours=hours, dry=False)),
         ("derive", lambda: __import__("derive").run(conn, hours=hours,
                                                     submit_mode=True)),
+        # insurance net: anything still unpriced after forecast+derive gets a
+        # family base-rate placeholder, so a closing question is never a blank
+        # (0 relative pts). Fills gaps only; never revises a real forecast.
+        ("placeholders", lambda: __import__("placeholders").run(
+            conn, hours=hours, submit_mode=True)),
+        ("sheet", lambda: __import__("sheet").write_for_window(conn,
+                                                               hours=hours)),
     ]
     for name, fn in steps:
         try:
@@ -93,8 +100,10 @@ def main() -> None:
                              WHERE submitted_at IS NOT NULL)""",
         (horizon,)).fetchone()[0]
     if unanswered:
-        print(f"[{stamp}] WARNING: {unanswered} questions closing soon have NO "
-              f"submission (alpha gap — needs derive.py or manual sheet)")
+        # placeholders ran in the chain above, so a residual gap is a real
+        # failure (a forfeit), not routine — page it.
+        _alert(f"{unanswered} questions closing soon have NO submission after "
+               f"forecast+derive+placeholders — investigate (forfeit risk)")
 
 
 if __name__ == "__main__":

@@ -25,6 +25,15 @@ import db
 # (regex, placeholder prob, rationale) — family base rates, v0.
 # UNVERIFIED training-knowledge rates, same flag discipline as derive BASE.
 FAMILIES = [
+    # 'both teams record a shot on target' — singular 'shot' slipped past the
+    # plural 'shots' SOT family below into the 0.45 catch-all; full match is a
+    # near-certainty (field ~0.72, settled 6/6 YES). Half variant is NOT (one
+    # half, ~0.6). qmodel prices this live; these are the WC_QMODEL-off backstop.
+    (r"both teams have at least 1 shot on target in the (first|second) half"
+     r"|halftime.*both teams have at least 1 shot on target", 0.68,
+     "both teams >=1 SOT in one half — moderate lean (field ~0.72)"),
+    (r"both teams have at least 1 shot on target", 0.85,
+     "both teams >=1 SOT full match — near-certain, field underrates"),
     (r"score or assist", 0.24, "attacking player score-or-assist family base"),
     (r"score a goal \(excluding own goals\)", 0.18, "anytime scorer family base"),
     (r"have \d+ or more shots on target", 0.55, "featured-player 1+ SOT family base"),

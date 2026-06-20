@@ -18,15 +18,45 @@ Fetched 2026-06-10. Quotes are verbatim from the published docs.
 - **§8 Q1 (knockout semantics):** question text disambiguates — sample reads
   "Will Mexico win the match **in regulation**?" Map per question text, not
   per stage. 90-min questions -> 3-way h2h; advancement -> to-advance markets.
-- **§8 Q5 (multi-entry):** "each bot is a separate leaderboard entry," 2 bots
-  per account. CONFLICTS with "one prediction per market per user" — verify
-  live with both keys on one cheap market before strategizing on it.
+- **§8 Q5 (multi-entry):** VERBATIM from /probabilitycup/api (re-fetched
+  2026-06-12): "Each API key is a separate leaderboard entry, and your manual
+  app picks are a separate entry from those." "Up to 2 active bots per user
+  (each bot has one API key)." So 2 bots + manual = 3 entries. The "one
+  prediction per market per user" sentence sits next to the PATCH-to-revise
+  instruction — it's revision guidance (don't re-POST, PATCH), per entry,
+  not an account-wide cap. Still confirm live with key #2 on one cheap
+  market before strategizing (and before key #2 touches any pipeline
+  script — overwrite risk if this reading is wrong).
 - Deadline of record: each market's `closing_time` field (poll it; don't
   assume kickoff).
 - Read-back gotcha: write integer 75, read back decimal 0.75.
 - Field-avg Brier is NOT exposed in `/results` — crowd model must be inferred
   (own Brier vs leaderboard movement) unless the platform publishes it later.
+- **BUT (found 2026-06-11): the "Your N locked predictions" email sent at
+  kickoff exposes per-question field consensus % and If-Yes/If-No relative
+  points** (from which field_avg_brier per question is exactly recoverable:
+  rel = (field_avg_brier − yours) × 100). Parse these from Gmail per match —
+  this is the crowd model the API withholds.
 - No webhooks/pagination; poll-based settlement via `GET /results`.
+- **No leaderboard/standings/rank endpoint exists (confirmed 2026-06-16 from the
+  `/probabilitycup/api` docs + a full path probe).** Docs verbatim: "Your aggregate
+  Smart Rating / Relative Brier Points … is computed by the leaderboard service and
+  surfaces in the SportsPredict leaderboards rather than this endpoint." Neither the
+  REST API nor the platform MCP exposes a rank; guessed paths 500 (route-absent, not
+  bad-params). Rank is **UI-only**: `play.sportspredict.com/probability-events/{event}/leaderboard`
+  (needs the account login, NOT the sp_live_ bot key). `GET /results` is your own
+  settled briers only. Track standing via our cumulative relative-points (parse_locked),
+  not an API call. Do not re-probe for a leaderboard endpoint.
+
+## Prizes (fetched 2026-06-11, sportspredict.com/probabilitycup)
+
+- **#1:** 10-week paid fellowship at Jump Trading, Chicago — "help trade a
+  $1,000,000 sports-related portfolio."
+- **#2–5:** Apple iPad Pro. **#6–10:** $200 Ticketmaster gift card.
+- Leaderboard is unified humans+bots; bots get a "BOT" label. Extremely
+  top-heavy payout → variance-seeking (decorrelated second entry) is +EV
+  for P(top finish); a pure consensus-follower converges to field-average
+  relative points by construction.
 
 ## Still open
 

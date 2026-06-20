@@ -1,0 +1,6 @@
+[Unit]
+Description=WC Probability Cup daily calibration review
+OnFailure=wc-failure-alert.service
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /mnt/c/Users/jgkal/OneDrive/Jump_Probability_Cup/routines/review.sh

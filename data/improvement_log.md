@@ -105,3 +105,6 @@ Realized edge vs consensus clone: -195. Flag-validation gate + per-bucket edges 
 
 ## 2026-06-20 — auto review (review_report.py)
 Realized edge vs consensus clone: -195. Flag-validation gate + per-bucket edges in `data/reviews/2026-06-20.md`.
+
+## 2026-06-21 — auto review (review_report.py)
+Realized edge vs consensus clone: -195. Flag-validation gate + per-bucket edges in `data/reviews/2026-06-21.md`.

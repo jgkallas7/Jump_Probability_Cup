@@ -104,6 +104,23 @@ def _sot_anchor_gain(recs, anchor=0.65, beta=0.5):
     return len(sub), sent, anch
 
 
+def _player_sot_anchor_gain(conn, recs, anchor=0.30, beta=0.5):
+    """WC_PLAYER_SOT_ANCHOR gate: realized rel on player '>=1 SOT' props, as-sent
+    vs blended DOWN toward `anchor`. Scope is forecast.is_player_sot_over — the SAME
+    predicate the live flag uses — fed the full team set so team SOT totals sharing
+    the bucket are excluded (a different, thinner bias)."""
+    import forecast
+    teams = {r[0] for r in conn.execute(
+        "SELECT home FROM matches UNION SELECT away FROM matches")}
+    sub = [(our, o, fab) for mm, our, fld, o, fab, txt in recs
+           if mm == "player_shots_on_target" and forecast.is_player_sot_over(txt, teams)]
+    if not sub:
+        return 0, 0.0, 0.0
+    sent = sum(_rel(our, o, fab) for our, o, fab in sub)
+    anch = sum(_rel(_clip((1 - beta) * our + beta * anchor), o, fab) for our, o, fab in sub)
+    return len(sub), sent, anch
+
+
 def _verdict(n, gain):
     if n < MIN_N:
         return f"HOLD (thin n={n} — no opinion)"
@@ -145,6 +162,13 @@ def build(conn) -> str:
     n, sent, anch = _sot_anchor_gain(recs, derive.SOT_ANCHOR, derive.SOT_BETA)
     L.append(f"- **WC_SOT_THRESH_ANCHOR** (SOT-threshold -> {derive.SOT_ANCHOR:.2f} "
              f"beta={derive.SOT_BETA}, excl already-fixed): sent {sent:+.0f} vs "
+             f"anchored {anch:+.0f} -> {_verdict(n, anch - sent)}")
+    # WC_PLAYER_SOT_ANCHOR: player '>=1 SOT' props shaded down at the shipped anchor/beta
+    import forecast
+    n, sent, anch = _player_sot_anchor_gain(conn, recs, forecast.PLAYER_SOT_ANCHOR,
+                                            forecast.PLAYER_SOT_BETA)
+    L.append(f"- **WC_PLAYER_SOT_ANCHOR** (player >=1 SOT -> {forecast.PLAYER_SOT_ANCHOR:.2f} "
+             f"beta={forecast.PLAYER_SOT_BETA}): sent {sent:+.0f} vs "
              f"anchored {anch:+.0f} -> {_verdict(n, anch - sent)}")
     # WC_KALSHI_HTOTAL: is the totals_half bucket beating the clone yet?
     th = edges.get("totals_half")

@@ -39,7 +39,7 @@ def _rel(p, o, fab):
 
 
 def _records(conn):
-    """One row per settled email question: (bucket, our_p, field_p, o, fab)."""
+    """One row per settled email question: (bucket, our_p, field_p, o, fab, text)."""
     rows = parse_locked.load_all()
     idx = parse_locked._match_index(conn)
     by_source = defaultdict(list)
@@ -62,13 +62,13 @@ def _records(conn):
             fab = brier + rr / 100.0
             mm = conn.execute("SELECT market_mapping FROM questions WHERE qid=?",
                               (qid,)).fetchone()[0] or "NULL"
-            out.append((mm, r["you"] / 100.0, r["field"] / 100.0, o, fab))
+            out.append((mm, r["you"] / 100.0, r["field"] / 100.0, o, fab, r["question"]))
     return out
 
 
 def _bucket_edges(recs):
     agg = defaultdict(lambda: [0, 0.0, 0.0])  # n, ours, clone
-    for mm, our, fld, o, fab in recs:
+    for mm, our, fld, o, fab, _txt in recs:
         a = agg[mm]
         a[0] += 1
         a[1] += _rel(our, o, fab)
@@ -78,12 +78,32 @@ def _bucket_edges(recs):
 
 def _shrink_gain(recs, mm_filter, beta):
     """Realized rel for a bucket: as-sent vs shrunk toward 0.5 by beta."""
-    sub = [(our, o, fab) for mm, our, fld, o, fab in recs if mm in mm_filter]
+    sub = [(our, o, fab) for mm, our, fld, o, fab, _txt in recs if mm in mm_filter]
     if not sub:
         return 0, 0.0, 0.0
     sent = sum(_rel(our, o, fab) for our, o, fab in sub)
     shrunk = sum(_rel(_clip((1 - beta) * our + beta * 0.5), o, fab) for our, o, fab in sub)
     return len(sub), sent, shrunk
+
+
+def _sot_anchor_gain(recs, anchor=0.65, beta=0.5):
+    """WC_SOT_THRESH_ANCHOR gate: realized rel on SOT-threshold questions, as-sent
+    vs blended toward `anchor`. Uses derive.is_sot_threshold so the gate can't drift
+    from the live flag; excludes the 'both teams >=1' template (already anchored in
+    qmodel — counting it would double-count an already-closed leak). The SOT race is
+    level-invariant and is excluded by is_sot_threshold itself."""
+    import derive
+    # NO_MARKET only — the flag lives in derive.py, which prices ONLY alpha
+    # questions; the book-mapped player_shots_on_target bucket shares the
+    # "shots on target" text but is priced by forecast.py and never anchored.
+    sub = [(our, o, fab) for mm, our, fld, o, fab, txt in recs
+           if mm == "NO_MARKET" and derive.is_sot_threshold(txt)
+           and "both teams" not in txt.lower()]
+    if not sub:
+        return 0, 0.0, 0.0
+    sent = sum(_rel(our, o, fab) for our, o, fab in sub)
+    anch = sum(_rel(_clip((1 - beta) * our + beta * anchor), o, fab) for our, o, fab in sub)
+    return len(sub), sent, anch
 
 
 def _verdict(n, gain):
@@ -122,6 +142,12 @@ def build(conn) -> str:
     n, sent, shrunk = _shrink_gain(recs, {"h2h"}, 0.25)
     L.append(f"- **WC_DEVCAP** (h2h shrink beta=0.25): sent {sent:+.0f} vs shrunk "
              f"{shrunk:+.0f} -> {_verdict(n, shrunk - sent)}")
+    # WC_SOT_THRESH_ANCHOR: SOT-threshold base anchor at the shipped anchor/beta
+    import derive
+    n, sent, anch = _sot_anchor_gain(recs, derive.SOT_ANCHOR, derive.SOT_BETA)
+    L.append(f"- **WC_SOT_THRESH_ANCHOR** (SOT-threshold -> {derive.SOT_ANCHOR:.2f} "
+             f"beta={derive.SOT_BETA}, excl already-fixed): sent {sent:+.0f} vs "
+             f"anchored {anch:+.0f} -> {_verdict(n, anch - sent)}")
     # WC_KALSHI_HTOTAL: is the totals_half bucket beating the clone yet?
     th = edges.get("totals_half")
     if th:

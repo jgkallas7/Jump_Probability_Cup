@@ -70,12 +70,20 @@ def is_player_sot_over(text: str, teams) -> bool:
     population. `teams` is the set of names to treat as NON-player subjects: the
     match's two teams in live use, all teams in the offline gate. Either way this
     excludes team SOT totals (subject is a team) and any line other than 'at
-    least 1'. Single source of truth for the flag's scope so live and gate agree."""
+    least 1'. Single source of truth for the flag's scope so live and gate agree.
+
+    Team subjects are normalized through the same TEAM_ALIASES map resolve_team
+    uses and compared case-insensitively, so an aliased team ('Türkiye' vs
+    'Turkey', 'United States' vs 'USA') is still recognized as a team and NOT
+    shaded down — a team's >=1 SOT runs ~0.8, the opposite of the 0.30 anchor."""
     if "at least 1 shot on target" not in text.lower():
         return False
     m = re.search(r"[Ww]ill (.+?) have", text)
-    subj = m.group(1).strip() if m else ""
-    return bool(subj) and subj not in teams
+    if not m:
+        return False
+    subj = m.group(1).strip()
+    subj_norm = TEAM_ALIASES.get(subj.lower(), subj).lower()
+    return bool(subj) and subj_norm not in {t.lower() for t in teams}
 
 
 def combine_kalshi(book_prob, kalshi_mid, w=KALSHI_BLEND_W):

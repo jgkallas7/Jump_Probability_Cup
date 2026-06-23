@@ -25,12 +25,25 @@ def test_excludes_team_subject():
     # team SOT total sharing the bucket — subject is one of the match's teams
     assert not forecast.is_player_sot_over(
         "Will Scotland have 3 or more shots on target?", MATCH_TEAMS)
-    # even a hypothetical team '>=1' line must be excluded (subject is a team)
+    # a real team '>=1' line (e.g. "Will Haiti have at least 1 SOT in the 2H")
+    # must be excluded — a team's >=1 SOT is ~0.8, the opposite of the 0.30 anchor
     assert not forecast.is_player_sot_over(
         "Will Scotland have at least 1 shot on target?", MATCH_TEAMS)
     # gate style: all-teams set excludes any team subject
     assert not forecast.is_player_sot_over(
         "Will Morocco have at least 1 shot on target?", ALL_TEAMS)
+
+
+def test_excludes_aliased_team_subject():
+    # alias divergence: SP text 'Türkiye'/'United States' vs Odds-API 'Turkey'/'USA'.
+    # Must still be recognized as a team and NOT shaded down (was a real bug).
+    assert not forecast.is_player_sot_over(
+        "Will Türkiye have at least 1 shot on target?", {"Turkey", "Paraguay"})
+    assert not forecast.is_player_sot_over(
+        "Will United States have at least 1 shot on target?", {"USA", "Paraguay"})
+    # a genuine player is still anchored even if a teammate shares the match
+    assert forecast.is_player_sot_over(
+        "Will Christian Pulisic have at least 1 shot on target?", {"USA", "Paraguay"})
 
 
 def test_excludes_higher_thresholds():

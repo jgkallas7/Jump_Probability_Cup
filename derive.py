@@ -62,12 +62,20 @@ SOT_BETA = float(os.environ.get("WC_SOT_BETA", "0.5"))
 
 
 def is_sot_threshold(text: str) -> bool:
-    """A 'shots on target' count/threshold question (NOT the level-invariant
-    team-vs-team race, which is a confirmed edge and must stay untouched)."""
+    """A 'shots on target' threshold question THIS FLAG SHOULD ANCHOR. Single
+    source of truth for the flag's scope — both the live applier (_apply_sot_anchor)
+    and the review_report gate key off this, so live and validated scope can't
+    drift. Excludes two SOT families it must NOT touch:
+      - the level-invariant team-vs-team race ('...more SOT than...') — a separate
+        confirmed edge; anchoring it would destroy that edge.
+      - 'both teams >=1 SOT' — already hand-anchored to ~0.68 in qmodel.py;
+        re-anchoring would double-anchor a deliberately calibrated price."""
     t = text.lower()
     if "shot" not in t or "on target" not in t:
         return False
-    return not ("more" in t and "than" in t)   # exclude '...more SOT than...' race
+    if "both teams" in t:                       # already anchored in qmodel.py
+        return False
+    return not ("more" in t and "than" in t)    # exclude '...more SOT than...' race
 
 
 def _apply_sot_anchor(text, res):

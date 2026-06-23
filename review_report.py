@@ -88,17 +88,15 @@ def _shrink_gain(recs, mm_filter, beta):
 
 def _sot_anchor_gain(recs, anchor=0.65, beta=0.5):
     """WC_SOT_THRESH_ANCHOR gate: realized rel on SOT-threshold questions, as-sent
-    vs blended toward `anchor`. Uses derive.is_sot_threshold so the gate can't drift
-    from the live flag; excludes the 'both teams >=1' template (already anchored in
-    qmodel — counting it would double-count an already-closed leak). The SOT race is
-    level-invariant and is excluded by is_sot_threshold itself."""
+    vs blended toward `anchor`. Scope is derive.is_sot_threshold itself — the SAME
+    predicate the live flag uses — so the gate can't drift from what ships (it
+    already excludes the SOT race and the already-anchored 'both teams >=1')."""
     import derive
     # NO_MARKET only — the flag lives in derive.py, which prices ONLY alpha
     # questions; the book-mapped player_shots_on_target bucket shares the
     # "shots on target" text but is priced by forecast.py and never anchored.
     sub = [(our, o, fab) for mm, our, fld, o, fab, txt in recs
-           if mm == "NO_MARKET" and derive.is_sot_threshold(txt)
-           and "both teams" not in txt.lower()]
+           if mm == "NO_MARKET" and derive.is_sot_threshold(txt)]
     if not sub:
         return 0, 0.0, 0.0
     sent = sum(_rel(our, o, fab) for our, o, fab in sub)

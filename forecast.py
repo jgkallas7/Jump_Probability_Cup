@@ -47,8 +47,35 @@ KALSHI_BLEND_W = 0.35
 DEVCAP_ON = os.environ.get("WC_DEVCAP", "") == "1"
 DEVCAP_BETA = 0.25
 DEVCAP_MARKETS = ("h2h",)
+
+# Player-SOT over-pricing anchor (default OFF, WC_PLAYER_SOT_ANCHOR). The book
+# market AND the SP field both over-price "<player> has >=1 shot on target":
+# settled parse_locked (2026-06-23) shows realized YES ~0.23 while we price ~0.49
+# and the field ~0.46 — a market-wide longshot/rotation bias we currently over-pay
+# even more than the crowd. Blend these props DOWN toward 0.30 (beta=0.5):
+# expanding-window OOS +43 over n=30, helped 8/9 match-days, beats the field.
+# Player-subject ">=1 SOT" ONLY — team SOT totals share this bucket (mis-mapped)
+# but carry a different, thinner threshold bias, so they're EXCLUDED. beta=0.5 not
+# 1.0: the honest expanding-window check loses at b=1.0, wins at 0.5. Tunable via
+# WC_PLAYER_SOT_TO / WC_PLAYER_SOT_BETA. Forward-validate the gate before go-live.
+PLAYER_SOT_ANCHOR_ON = os.environ.get("WC_PLAYER_SOT_ANCHOR", "") == "1"
+PLAYER_SOT_ANCHOR = float(os.environ.get("WC_PLAYER_SOT_TO", "0.30"))
+PLAYER_SOT_BETA = float(os.environ.get("WC_PLAYER_SOT_BETA", "0.5"))
 _K_CLIENT = None
 _K_BOOK: dict[tuple, dict] = {}
+
+
+def is_player_sot_over(text: str, teams) -> bool:
+    """True for a player '>=1 shot on target' prop — the validated over-priced
+    population. `teams` is the set of names to treat as NON-player subjects: the
+    match's two teams in live use, all teams in the offline gate. Either way this
+    excludes team SOT totals (subject is a team) and any line other than 'at
+    least 1'. Single source of truth for the flag's scope so live and gate agree."""
+    if "at least 1 shot on target" not in text.lower():
+        return False
+    m = re.search(r"[Ww]ill (.+?) have", text)
+    subj = m.group(1).strip() if m else ""
+    return bool(subj) and subj not in teams
 
 
 def combine_kalshi(book_prob, kalshi_mid, w=KALSHI_BLEND_W):
@@ -325,6 +352,13 @@ def run(conn, hours: float = 36) -> list[dict]:
             damped = (1 - DEVCAP_BETA) * final + DEVCAP_BETA * 0.5
             dev_reason = (f"{dev_reason} | " if dev_reason else "") + \
                 f"devcap {market} {final:.3f}->{damped:.3f}"
+            final = damped
+            dev_bps = round((final - consensus_rec) * 10000)
+        if PLAYER_SOT_ANCHOR_ON and q["market_mapping"] == "player_shots_on_target" \
+                and is_player_sot_over(q["text"], (q["home"], q["away"])):
+            damped = (1 - PLAYER_SOT_BETA) * final + PLAYER_SOT_BETA * PLAYER_SOT_ANCHOR
+            dev_reason = (f"{dev_reason} | " if dev_reason else "") + \
+                f"psotanchor {final:.3f}->{damped:.3f}"
             final = damped
             dev_bps = round((final - consensus_rec) * 10000)
         if prob is None:                             # rescued — Kalshi is the source

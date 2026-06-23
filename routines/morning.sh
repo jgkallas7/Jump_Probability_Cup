@@ -47,6 +47,17 @@ export WC_DEVCAP=1
 # loaded/concentrated (n=21, one +30 day) — if the nightly gate slides to
 # HOLD/REJECT as more settle, flip this OFF. Tunable: WC_SOT_ANCHOR/WC_SOT_BETA.
 export WC_SOT_THRESH_ANCHOR=1
+# Player-SOT over-pricing anchor: shade book-mapped player ">=1 shot on target"
+# props DOWN toward 0.30 at beta=0.5 (player-subject only; mis-mapped team SOT
+# totals excluded). ENABLED 2026-06-23 after its gate cleared: review_report
+# _player_sot_anchor_gain on SETTLED data = sent +54 vs anchored +158 = +104 over
+# n=30 (APPROVE). HONEST forward number is the look-ahead-free expanding-window
+# +43 (the +104 anchor value is informed by the realized 0.23 base); helped 8/9
+# days, beats the field. Contrarian book edge — books+crowd over-price player SOT
+# (longshot/rotation bias), we shade past them. beta=0.5 not 1.0 (expanding-window
+# LOSES at 1.0). WATCH the gate nightly; if the deeper cause is rotation, lineup
+# data is the better long-term fix. Tunable: WC_PLAYER_SOT_TO/WC_PLAYER_SOT_BETA.
+export WC_PLAYER_SOT_ANCHOR=1
 $PY team_rates.py refresh >/dev/null 2>&1 || echo "team_rates refresh failed (qmodel falls back to prior)"
 
 {

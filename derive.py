@@ -46,6 +46,47 @@ KALSHI_ON = os.environ.get("WC_KALSHI", "") == "1"
 _KALSHI_CLIENT = None
 _KALSHI_BOOK: dict[str, dict] = {}
 
+# SOT-threshold base anchor (OFF by default, WC_SOT_THRESH_ANCHOR). Our raw
+# counted-rate Poisson survival systematically UNDER-prices "N-or-more shots on
+# target" questions: contest SOT lines are written low, so they resolve YES
+# ~65-70%, but we price them ~45-55%. Per-template parse_locked (2026-06-22):
+# the loss is DIRECTIONAL (level bias), not overconfidence — shrink-to-0.5 barely
+# helps (+4), but blending toward a 0.65 base rate recovers +38 over n=21 on the
+# still-mispriced total_sot+team_sot templates (both>=1 was already anchored at
+# qmodel.py; the SOT race is level-invariant and EXCLUDED). beta=0.5 keeps half
+# the per-match signal so "8+" still prices below "4+". Tunable via WC_SOT_ANCHOR
+# / WC_SOT_BETA. Forward-validate the gate (review_report) before go-live.
+SOT_THRESH_ANCHOR_ON = os.environ.get("WC_SOT_THRESH_ANCHOR", "") == "1"
+SOT_ANCHOR = float(os.environ.get("WC_SOT_ANCHOR", "0.65"))
+SOT_BETA = float(os.environ.get("WC_SOT_BETA", "0.5"))
+
+
+def is_sot_threshold(text: str) -> bool:
+    """A 'shots on target' threshold question THIS FLAG SHOULD ANCHOR. Single
+    source of truth for the flag's scope — both the live applier (_apply_sot_anchor)
+    and the review_report gate key off this, so live and validated scope can't
+    drift. Excludes two SOT families it must NOT touch:
+      - the level-invariant team-vs-team race ('...more SOT than...') — a separate
+        confirmed edge; anchoring it would destroy that edge.
+      - 'both teams >=1 SOT' — already hand-anchored to ~0.68 in qmodel.py;
+        re-anchoring would double-anchor a deliberately calibrated price."""
+    t = text.lower()
+    if "shot" not in t or "on target" not in t:
+        return False
+    if "both teams" in t:                       # already anchored in qmodel.py
+        return False
+    return not ("more" in t and "than" in t)    # exclude '...more SOT than...' race
+
+
+def _apply_sot_anchor(text, res):
+    """Blend a SOT-threshold price toward the SOT_ANCHOR base rate. No-op when
+    the flag is off, the result is empty, or the question isn't a SOT threshold."""
+    if res is None or not SOT_THRESH_ANCHOR_ON or not is_sot_threshold(text):
+        return res
+    prob, tier, reason = res
+    blended = (1 - SOT_BETA) * prob + SOT_BETA * SOT_ANCHOR
+    return blended, tier, f"{reason} | sotanchor {prob:.2f}->{blended:.2f}"
+
 
 def _kalshi_price(conn, m, text):
     """Try a live Kalshi mid for this question. Fully guarded — any failure
@@ -507,24 +548,25 @@ def h_btts_and_total(m, k, conn, now):
 def derive_question(conn, q, now):
     text = q["text"]
     m = {"match_id": q["match_id"], "home": q["home"], "away": q["away"]}
+    res = None
     if KALSHI_ON:
-        kp = _kalshi_price(conn, m, text)
-        if kp is not None:
-            return kp
-    if QMODEL_ON:
-        qm = _qmodel_price(conn, m, text, now)
-        if qm is not None:
-            return qm
-    g = re.search(r"Will both teams score AND the match have (\d+) or more", text)
-    if g:
-        return h_btts_and_total(m, int(g.group(1)), conn, now)
-    for pattern, fn in HANDLERS:
-        if fn is None:
-            continue
-        g = re.search(pattern, text)
+        res = _kalshi_price(conn, m, text)
+    if res is None and QMODEL_ON:
+        res = _qmodel_price(conn, m, text, now)
+    if res is None:
+        g = re.search(r"Will both teams score AND the match have (\d+) or more", text)
         if g:
-            return fn(m, g, conn, now)
-    return None
+            res = h_btts_and_total(m, int(g.group(1)), conn, now)
+    if res is None:
+        for pattern, fn in HANDLERS:
+            if fn is None:
+                continue
+            g = re.search(pattern, text)
+            if g:
+                res = fn(m, g, conn, now)
+                break
+    # post-process: SOT-threshold base anchor (flag-gated; no-op otherwise)
+    return _apply_sot_anchor(text, res)
 
 
 def run(conn, hours: float = 30, submit_mode: bool = False, dry: bool = False):

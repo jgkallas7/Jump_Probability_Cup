@@ -219,3 +219,19 @@ RECOMMENDATION: **APPROVE the combo.** Enable BOTH together (order matters — G
   `export WC_SOT_RACE_GS=1`  and  `export WC_SOT_RACE_DECOMP=1.5`  in routines/flags.sh.
 This SUPERSEDES the earlier "HOLD WC_SOT_RACE_DECOMP": de-comp is approved *as part of the combo*,
 not standalone. Code never auto-edits flags.sh — a human flips both.
+
+## 2026-06-25 — review fix (scope) + discovered pre-existing leading-form bug
+Independent review of PR #3 flagged that `is_sot_race` (keyword-based) matched the leading
+"In the second half, will X have more SOT than Y?" phrasing, but h_sot_race_h2's dispatch regex
+is TRAILING-only — so with WC_SOT_RACE_GS on, that form would be blocked from qmodel AND missed by
+the handler → stranded at the placeholder. Real-data check: the contest uses BOTH forms (45
+trailing + **9 leading** of 54). FIX: narrowed `is_sot_race` to the handler's exact scope (trailing
+'more shots on target than ... in the second half'), so is_sot_race ⟹ h_sot_race_h2 can price it;
+routing can never strand. The 45 trailing races (= what the re-pricing validation actually scored)
+are unaffected. +2 tests (leading-form deferral, full-match exclusion); suite 56 pass.
+FOLLOW-UP (separate, NOT this PR): the 9 leading-form 2H SOT races are mispriced to placeholder
+TODAY — qmodel's regex is case-sensitive 'Will' and the handler's is trailing-only, so neither
+matches "In the second half, will...". Fixing needs a broadened dispatch (handle both word orders +
+case) in BOTH derive HANDLERS and qmodel — but that CHANGES production for flags-OFF (placeholder →
+goal-share), so it can't ride in this no-op-until-flipped PR. Track as its own change; mirror the
+corners-race handler which already accepts the leading form.

@@ -125,14 +125,26 @@ def _apply_sot_anchor(text, res):
 
 def is_sot_race(text: str) -> bool:
     """The 2nd-half team-vs-team SOT race ('Will X have more shots on target than
-    Y in the second half?'). Single source of truth for WC_SOT_RACE_DECOMP scope —
-    the live applier (_apply_race_decomp) and the review_report gate both key off
-    this, so live and validated scope can't drift. Mutually exclusive with
-    is_sot_threshold (which excludes the race), so the two post-processors that
-    derive_question chains never both fire on the same question."""
+    Y in the second half?'). Single source of truth for WC_SOT_RACE_GS routing AND
+    WC_SOT_RACE_DECOMP scope — _route_race_to_goal_share, _apply_race_decomp and the
+    review_report gate all key off this, so live and validated scope can't drift.
+
+    Matches the h_sot_race_h2 handler's scope EXACTLY: the phrase 'more shots on
+    target than' with 'in the second half' occurring AFTER it (the trailing form,
+    45 of 54 settled race questions). The contest ALSO asks ~9 in the leading form
+    ('In the second half, will X have more shots on target than Y?'), which this
+    deliberately does NOT match: h_sot_race_h2's dispatch regex is trailing-only, AND
+    qmodel's is case-sensitive 'Will', so the leading form is missed by BOTH pricers
+    today and falls to the placeholder base rate — a pre-existing bug, out of scope
+    here (fixing it would change production for flags-OFF, breaking the no-op
+    guarantee; tracked as follow-up). Excluding it keeps is_sot_race ⟹ 'h_sot_race_h2
+    can price this', so WC_SOT_RACE_GS routing can never block qmodel and then strand
+    the question at the placeholder. Requires 'than', so it stays mutually exclusive
+    with is_sot_threshold (which excludes '...more ... than ...')."""
     t = text.lower()
-    return ("shot" in t and "on target" in t
-            and "more" in t and "than" in t and "second half" in t)
+    if "more shots on target than" not in t or "in the second half" not in t:
+        return False
+    return t.index("in the second half") > t.index("more shots on target than")
 
 
 def _route_race_to_goal_share(text):

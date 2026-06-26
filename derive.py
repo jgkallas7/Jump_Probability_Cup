@@ -60,6 +60,41 @@ SOT_THRESH_ANCHOR_ON = os.environ.get("WC_SOT_THRESH_ANCHOR", "") == "1"
 SOT_ANCHOR = float(os.environ.get("WC_SOT_ANCHOR", "0.65"))
 SOT_BETA = float(os.environ.get("WC_SOT_BETA", "0.5"))
 
+# --- 2H SOT-race de-compression (WC_SOT_RACE_DECOMP) -------------------------
+# The team-vs-team "more SOT than" race was long believed a contrarian edge: we
+# compress toward 0.5 vs a supposedly over-dispersed field. The matchday-3 locked-
+# email harvest (2026-06-25) FALSIFIED that. Over n=32 derive-priced races the
+# field is well-calibrated (race favorites win ~70%, the field says ~68%) while our
+# double-damped price (0.5x share-damp in sot_share, then x0.6 prob-damp in
+# h_sot_race_h2) sits at ~53% on favorites and ~38% on underdogs — squashed toward
+# 0.5 on BOTH sides. Realized: OURS -94.7 (negative!) vs field-clone +76.8.
+# De-compression p' = 0.5 + gamma*(p-0.5), gamma>=1, pushes the final race price
+# back toward the extremes where the field AND reality live. Pricer-agnostic (wraps
+# the derive dispatch, so it covers both h_sot_race_h2 and the qmodel raw-Skellam
+# branch). Honest expanding-window recovers +98 banked pts over as-sent; the gain is
+# monotonic across gamma (not a knife-edge), but the OOS optimum sits at the grid
+# edge (gamma>=3) — a tail-risk flag, so default to a CONSERVATIVE gamma (mirror the
+# WC_SOT_BETA=0.5-over-1.0 caution). gamma=1.0 is the no-op default (flag OFF).
+# Scope is is_sot_race ONLY. Forward-validate the review_report gate before raising.
+RACE_DECOMP = float(os.environ.get("WC_SOT_RACE_DECOMP", "1.0"))
+
+# --- 2H SOT-race goal-share routing (WC_SOT_RACE_GS) ------------------------
+# The race has TWO pricers: derive's h_sot_race_h2 (market goal-share -> Skellam,
+# DIFFERENTIATES the favorite) and qmodel's raw-Skellam on counted SOT rates
+# (which cluster ~4.25 across teams -> share~0.5 -> price ~0.44 for EVERYONE).
+# qmodel is tried first, so once teams log a few games the undifferentiated raw
+# price shadows the better goal-share one — and that's the live forward regime.
+# Re-pricing the settled races through the goal-share path (now=kickoff, no look-
+# ahead; reproduction err 0.057 on derive-priced races): on the qmodel-raw races
+# the goal-share price tracks the field on BOTH sides (fav 0.43->0.55, dog
+# 0.47->0.29), cutting realized edge -79 -> -38; with WC_SOT_RACE_DECOMP=1.5 on top
+# -79 -> -22 (R3 current regime -88 -> -20). Goal-share gets the SIDE right, then
+# de-comp amplifies the now-correct signal — that's the validated SEQUENCE (de-comp
+# alone was premature). This flag skips the qmodel race branch so the race falls
+# through to h_sot_race_h2. Re-pricing backtest, not a sent-price rescale gate, so
+# FORWARD-validate (watch the SOT-race bucket edge in review_report). Default OFF.
+RACE_GS_ON = os.environ.get("WC_SOT_RACE_GS", "") == "1"
+
 
 def is_sot_threshold(text: str) -> bool:
     """A 'shots on target' threshold question THIS FLAG SHOULD ANCHOR. Single
@@ -86,6 +121,48 @@ def _apply_sot_anchor(text, res):
     prob, tier, reason = res
     blended = (1 - SOT_BETA) * prob + SOT_BETA * SOT_ANCHOR
     return blended, tier, f"{reason} | sotanchor {prob:.2f}->{blended:.2f}"
+
+
+def is_sot_race(text: str) -> bool:
+    """The 2nd-half team-vs-team SOT race ('Will X have more shots on target than
+    Y in the second half?'). Single source of truth for WC_SOT_RACE_GS routing AND
+    WC_SOT_RACE_DECOMP scope — _route_race_to_goal_share, _apply_race_decomp and the
+    review_report gate all key off this, so live and validated scope can't drift.
+
+    Matches the h_sot_race_h2 handler's scope EXACTLY: the phrase 'more shots on
+    target than' with 'in the second half' occurring AFTER it (the trailing form,
+    45 of 54 settled race questions). The contest ALSO asks ~9 in the leading form
+    ('In the second half, will X have more shots on target than Y?'), which this
+    deliberately does NOT match: h_sot_race_h2's dispatch regex is trailing-only, AND
+    qmodel's is case-sensitive 'Will', so the leading form is missed by BOTH pricers
+    today and falls to the placeholder base rate — a pre-existing bug, out of scope
+    here (fixing it would change production for flags-OFF, breaking the no-op
+    guarantee; tracked as follow-up). Excluding it keeps is_sot_race ⟹ 'h_sot_race_h2
+    can price this', so WC_SOT_RACE_GS routing can never block qmodel and then strand
+    the question at the placeholder. Requires 'than', so it stays mutually exclusive
+    with is_sot_threshold (which excludes '...more ... than ...')."""
+    t = text.lower()
+    if "more shots on target than" not in t or "in the second half" not in t:
+        return False
+    return t.index("in the second half") > t.index("more shots on target than")
+
+
+def _route_race_to_goal_share(text):
+    """True when WC_SOT_RACE_GS is on AND this is the 2H SOT race — derive_question
+    then skips qmodel's undifferentiated raw-Skellam so the race falls through to
+    h_sot_race_h2 (market goal-share, which identifies the favorite)."""
+    return RACE_GS_ON and is_sot_race(text)
+
+
+def _apply_race_decomp(text, res):
+    """De-compress a 2H SOT-race price away from 0.5 by RACE_DECOMP. No-op when
+    gamma == 1.0 (the default / flag OFF), the result is empty, or the question
+    isn't a race. Clipped to [0.01, 0.99] to match shrink_extremes."""
+    if res is None or RACE_DECOMP == 1.0 or not is_sot_race(text):
+        return res
+    prob, tier, reason = res
+    dec = min(0.99, max(0.01, 0.5 + RACE_DECOMP * (prob - 0.5)))
+    return dec, tier, f"{reason} | racedecomp g={RACE_DECOMP:g} {prob:.2f}->{dec:.2f}"
 
 
 def _kalshi_price(conn, m, text):
@@ -551,7 +628,7 @@ def derive_question(conn, q, now):
     res = None
     if KALSHI_ON:
         res = _kalshi_price(conn, m, text)
-    if res is None and QMODEL_ON:
+    if res is None and QMODEL_ON and not _route_race_to_goal_share(text):
         res = _qmodel_price(conn, m, text, now)
     if res is None:
         g = re.search(r"Will both teams score AND the match have (\d+) or more", text)
@@ -565,8 +642,9 @@ def derive_question(conn, q, now):
             if g:
                 res = fn(m, g, conn, now)
                 break
-    # post-process: SOT-threshold base anchor (flag-gated; no-op otherwise)
-    return _apply_sot_anchor(text, res)
+    # post-process: SOT-threshold base anchor, then 2H-race de-compression
+    # (both flag-gated; no-ops otherwise; scopes are mutually exclusive)
+    return _apply_race_decomp(text, _apply_sot_anchor(text, res))
 
 
 def run(conn, hours: float = 30, submit_mode: bool = False, dry: bool = False):

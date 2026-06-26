@@ -121,6 +121,23 @@ def _player_sot_anchor_gain(conn, recs, anchor=0.30, beta=0.5):
     return len(sub), sent, anch
 
 
+def _sot_race_decomp_gain(recs, gamma):
+    """WC_SOT_RACE_DECOMP gate: realized rel on 2H SOT-race questions, as-sent vs
+    de-compressed away from 0.5 by `gamma`. Scope is derive.is_sot_race — the SAME
+    predicate the live flag uses. NOTE: this keys on the question text, so it also
+    counts the handful of early races that fell back to a placeholder base rate (the
+    flag only de-compresses derive-priced races); going forward every race is derive-
+    priced, so the contamination shrinks. The clean go/no-go backtest excluded them."""
+    import derive
+    sub = [(our, o, fab) for mm, our, fld, o, fab, txt in recs
+           if mm == "NO_MARKET" and derive.is_sot_race(txt)]
+    if not sub:
+        return 0, 0.0, 0.0
+    sent = sum(_rel(our, o, fab) for our, o, fab in sub)
+    dec = sum(_rel(_clip(0.5 + gamma * (our - 0.5)), o, fab) for our, o, fab in sub)
+    return len(sub), sent, dec
+
+
 def _verdict(n, gain):
     if n < MIN_N:
         return f"HOLD (thin n={n} — no opinion)"
@@ -170,6 +187,14 @@ def build(conn) -> str:
     L.append(f"- **WC_PLAYER_SOT_ANCHOR** (player >=1 SOT -> {forecast.PLAYER_SOT_ANCHOR:.2f} "
              f"beta={forecast.PLAYER_SOT_BETA}): sent {sent:+.0f} vs "
              f"anchored {anch:+.0f} -> {_verdict(n, anch - sent)}")
+    # WC_SOT_RACE_DECOMP: 2H SOT-race de-compression. Evaluate at the live gamma if
+    # the flag is on, else at the 1.5 conservative candidate so the gate stays
+    # decision-useful while OFF (the OOS optimum is at the grid edge — ship gentle).
+    cand = derive.RACE_DECOMP if derive.RACE_DECOMP != 1.0 else 1.5
+    n, sent, dec = _sot_race_decomp_gain(recs, cand)
+    L.append(f"- **WC_SOT_RACE_DECOMP** (2H SOT-race de-compress gamma={cand:g}"
+             f"{', LIVE' if derive.RACE_DECOMP != 1.0 else ', candidate'}): sent "
+             f"{sent:+.0f} vs de-compressed {dec:+.0f} -> {_verdict(n, dec - sent)}")
     # WC_KALSHI_HTOTAL: is the totals_half bucket beating the clone yet?
     th = edges.get("totals_half")
     if th:

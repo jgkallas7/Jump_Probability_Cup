@@ -60,3 +60,22 @@ export WC_SOT_THRESH_ANCHOR=1
 # LOSES at 1.0). WATCH the gate nightly; if the deeper cause is rotation, lineup
 # data is the better long-term fix. Tunable: WC_PLAYER_SOT_TO/WC_PLAYER_SOT_BETA.
 export WC_PLAYER_SOT_ANCHOR=1
+# 2H SOT-race goal-share routing + de-compression (the combo, enabled together —
+# GS gets the favorite's side right, then DECOMP amplifies the now-correct signal;
+# DECOMP alone is premature). The matchday-3 harvest REVERSED the old "race is a
+# contrarian edge, compress toward 0.5" thesis: the field is well-calibrated (race
+# favorites win ~70%, field ~68%) while our double-damped price sat ~53%/~38% —
+# squashed both sides — losing. GS skips qmodel's undifferentiated raw-Skellam
+# (counted SOT rates cluster ~4.25 -> 0.44 for everyone) so the race uses market
+# goal-share, which identifies the favorite. ENABLED 2026-06-26. Validation is a
+# RE-PRICING backtest (now=kickoff, no look-ahead, reproduction err 0.057), NOT a
+# clean rescale gate — same constraint WC_KALSHI shipped under, so forward-validate:
+# R3 current-regime edge -88 -> -41 (GS) -> -20 (GS+decomp1.5), ~+69 banked pts, but
+# the forward sample is THIN (n=8) and it still trails the field-clone ~-20 (our race
+# model stays weaker than the crowd; this is damage-control, ~75% of the gap). WATCH
+# the SOT-race bucket nightly (review_report carries a WC_SOT_RACE_DECOMP gate); if it
+# regresses or through the 2-3x knockout multiplier, flip OFF. Tunable: WC_SOT_RACE_DECOMP
+# (gamma, default 1.0 = no-op; in-sample optimum is at the grid edge -> ship gentle 1.5).
+# Leading-form races ("In the second half, will...") stay on placeholder — see issue #4.
+export WC_SOT_RACE_GS=1
+export WC_SOT_RACE_DECOMP=1.5

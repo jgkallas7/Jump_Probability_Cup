@@ -79,3 +79,16 @@ export WC_PLAYER_SOT_ANCHOR=1
 # Leading-form races ("In the second half, will...") stay on placeholder — see issue #4.
 export WC_SOT_RACE_GS=1
 export WC_SOT_RACE_DECOMP=1.5
+# Knockout "Will X advance?" router (default OFF, WC_TO_ADVANCE_H2H). These
+# to_advance questions have no snapshot market AND no pricer branch, so today they
+# fall to a ~50% base-rate placeholder — scored at the 2x/3x knockout multiplier.
+# The flag prices them off the h2h market as the 2-way (draw-no-bet) devig
+# P(advance)=P(win)/(1-P(draw)); falls back to the placeholder if h2h isn't up yet.
+# No settled advancement data exists to OOS-gate (KO-only), so verification is
+# "sane numbers on a DB copy", not a backtest — done 2026-06-27 (prices span
+# 0.03-0.97 by favorite strength, P(home adv)+P(away adv)=1.000 exactly).
+# ENABLED 2026-06-27 ahead of R32 (2026-06-28). Safe today: no to_advance questions
+# exist until KO, so it's a no-op for group games. Still confirm the question wording
+# matches _ADVANCE_RE against the first real R32 advancement question (else it falls
+# back to the placeholder — no harm — until the regex is widened).
+export WC_TO_ADVANCE_H2H=1

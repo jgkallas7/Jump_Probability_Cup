@@ -3,7 +3,42 @@
 from datetime import datetime, timezone
 
 import db as dbmod
-from forecast import consensus, map_question
+from forecast import consensus, map_question, to_advance_prob
+
+
+def _ins_h2h(conn, ts, outcome, prob):
+    conn.executemany(
+        """INSERT INTO market_snapshots
+           (ts, source, book, match_id, event_label, market, outcome, point,
+            raw_price, raw_prob, fair_prob, fair_prob_mult, divergence_pts, quote_ts)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        [(ts, "odds_api", b, "M1", "x", "h2h", outcome, None,
+          None, prob, prob, prob, 0.5, ts) for b in ("pinnacle", "betfair_ex_uk")])
+
+
+def test_to_advance_two_way_devig():
+    # advancing = win in regulation OR survive ET/pens; draw split proportionally
+    # collapses to the draw-no-bet devig: P(adv) = P(win)/(1-P(draw)).
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc); ts = now.isoformat()
+    _ins_h2h(conn, ts, "Brazil", 0.60)
+    _ins_h2h(conn, ts, "Draw", 0.25)          # opp implied 0.15
+    q = {"text": "Will Brazil advance to the round of 16?", "match_id": "M1",
+         "home": "Brazil", "away": "Japan"}
+    res = to_advance_prob(conn, q, now)
+    assert res is not None
+    p_adv, p_win, p_draw, _ = res
+    assert abs(p_adv - 0.60 / (1 - 0.25)) < 1e-9     # = 0.80, beats a ~0.50 placeholder
+    assert abs(p_win - 0.60) < 1e-9 and abs(p_draw - 0.25) < 1e-9
+
+
+def test_to_advance_none_without_h2h():
+    # no h2h snapshot -> return None so the caller falls back to the placeholder
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    q = {"text": "Will Brazil advance to the round of 16?", "match_id": "M1",
+         "home": "Brazil", "away": "Japan"}
+    assert to_advance_prob(conn, q, now) is None
 
 
 def test_h2h_mapping_with_alias():

@@ -61,6 +61,15 @@ DEVCAP_MARKETS = ("h2h",)
 PLAYER_SOT_ANCHOR_ON = os.environ.get("WC_PLAYER_SOT_ANCHOR", "") == "1"
 PLAYER_SOT_ANCHOR = float(os.environ.get("WC_PLAYER_SOT_TO", "0.30"))
 PLAYER_SOT_BETA = float(os.environ.get("WC_PLAYER_SOT_BETA", "0.5"))
+# To-advance router (default OFF, WC_TO_ADVANCE_H2H). Knockout "Will X advance?"
+# questions map to to_advance, which has NO snapshot market and NO pricer branch,
+# so they fall to a base-rate placeholder — at the 2x knockout multiplier. For a
+# single KO tie, advancing = win in regulation OR survive ET/pens; splitting the
+# draw proportionally collapses to the 2-way (draw-no-bet) devig
+# P(advance) = P(win) / (1 - P(draw)), derived from the h2h market we already
+# snapshot. Strictly beats the ~50% placeholder. No settled advancement data to
+# OOS-gate (KO-only) -> verify sane on a DB copy before the human flips it live.
+TO_ADVANCE_ON = os.environ.get("WC_TO_ADVANCE_H2H", "") == "1"
 _K_CLIENT = None
 _K_BOOK: dict[tuple, dict] = {}
 
@@ -327,6 +336,32 @@ def consensus(conn, match_id: str, market: str, outcome: str,
     return prob, len(weighted), detail
 
 
+_ADVANCE_RE = re.compile(r"Will (.+?) (?:advance|qualify|progress|reach|go through)",
+                         re.I)
+
+
+def to_advance_prob(conn, q, now):
+    """Price a knockout 'Will X advance?' question off the h2h market as the
+    2-way (draw-no-bet) devig: P(advance) = P(win) / (1 - P(draw)).
+
+    Returns (p_adv, p_win, p_draw, detail) or None if the text is unparseable,
+    the team can't be resolved, or h2h isn't snapshotted yet (-> caller falls
+    through to the placeholder)."""
+    m = _ADVANCE_RE.match(q["text"].strip())
+    if not m:
+        return None
+    team = resolve_team(m.group(1), q["home"], q["away"])
+    if not team:
+        return None
+    p_win, _, _ = consensus(conn, q["match_id"], "h2h", team, None, now)
+    p_draw, _, _ = consensus(conn, q["match_id"], "h2h", "Draw", None, now)
+    if p_win is None or p_draw is None or p_draw >= 1.0:
+        return None
+    p_adv = p_win / (1.0 - p_draw)
+    return p_adv, p_win, p_draw, {"h2h_win": round(p_win, 4),
+                                  "h2h_draw": round(p_draw, 4)}
+
+
 def run(conn, hours: float = 36) -> list[dict]:
     now = datetime.now(timezone.utc)
     horizon = (now + timedelta(hours=hours)).isoformat()
@@ -342,6 +377,28 @@ def run(conn, hours: float = 36) -> list[dict]:
     ts = now.isoformat()
     sheet, skipped = [], []
     for q in qs:
+        # Knockout advancement: derive from h2h before the standard market path
+        # (needs two h2h consensus calls combined, not one outcome). Flag OFF or
+        # h2h-unavailable -> fall through to map_question -> placeholder.
+        if TO_ADVANCE_ON and q["market_mapping"] == "to_advance":
+            adv = to_advance_prob(conn, q, now)
+            if adv is not None:
+                p_adv, p_win, p_draw, detail = adv
+                final = shrink_extremes(p_adv)
+                dev_reason = (f"to_advance<-h2h 2way win{p_win:.3f}/"
+                              f"(1-draw{p_draw:.3f})={p_adv:.3f}")
+                conn.execute("""
+                    INSERT INTO forecasts(qid, ts, consensus_prob, blend_w,
+                                          final_prob, deviation_bps, deviation_reason)
+                    VALUES (?,?,?,?,?,?,?)""",
+                    (q["qid"], ts, round(p_adv, 5), None, round(final, 5),
+                     round((final - p_adv) * 10000), dev_reason))
+                sheet.append({"qid": q["qid"], "text": q["text"],
+                              "match": f"{q['home']} vs {q['away']}",
+                              "kickoff": q["kickoff_utc"], "market": "to_advance<-h2h",
+                              "prob": final, "submit_int": int(round(final * 100)) or 1,
+                              "n_books": 0, "books": detail})
+                continue
         target = map_question(q["text"], q["market_mapping"], q["home"], q["away"])
         if target is None:
             skipped.append((q["text"], "unparseable"))

@@ -14,22 +14,19 @@ import derive
 RACE_TEXTS = [
     "Will Austria have more shots on target than Argentina in the second half?",
     "Will Mexico have more shots on target than South Korea in the second half?",
+    # leading form — now also a race (issue #4 closed 2026-06-29: a leading-form
+    # regex was added to HANDLERS so h_sot_race_h2 prices it too).
+    "In the second half, will Tunisia have more shots on target than Japan?",
 ]
-# Must NOT route/de-compress. is_sot_race matches the handler's TRAILING scope only,
-# so all of these return False: a SOT threshold (anchored elsewhere), both-teams,
-# non-SOT, a corners race, a FULL-MATCH "more than" (no 'second half' -> not a 2H
-# race), and the LEADING "In the second half, will..." phrasing. The contest DOES use
-# that leading form (~9 of 54 races), but h_sot_race_h2's dispatch regex is trailing-
-# only (and qmodel's is case-sensitive 'Will'), so it's already mispriced to placeholder
-# today; matching it here would block qmodel and STRAND it. is_sot_race leaves it on the
-# (pre-existing placeholder) path -- a separate follow-up fix, deliberately out of scope.
+# Must NOT route/de-compress: a SOT threshold (anchored elsewhere), both-teams,
+# non-SOT, a corners race, and a FULL-MATCH "more than" (no 'second half' -> not a
+# 2H race). All return False from is_sot_race.
 NOT_RACE_TEXTS = [
     "Will Iraq have 2 or more shots on target in the second half?",
     "Will both teams have at least 1 shot on target?",
     "Will Austria be caught offside 2 or more times?",
     "Will Spain have more corner kicks than Cape Verde in the second half?",
     "Will Brazil have more shots on target than Serbia?",                      # full match, no 2H
-    "In the second half, will Tunisia have more shots on target than Japan?",  # leading form -> qmodel path
 ]
 
 
@@ -38,13 +35,12 @@ def test_detects_only_the_2h_sot_race():
     assert not any(derive.is_sot_race(t) for t in NOT_RACE_TEXTS)
 
 
-def test_leading_second_half_form_stays_on_qmodel_path():
-    # regression for the review finding: h_sot_race_h2's dispatch regex is
-    # trailing-only, so the leading "In the second half, will..." phrasing must NOT
-    # match is_sot_race — otherwise WC_SOT_RACE_GS would block qmodel and the handler
-    # would miss it, stranding the question at the placeholder. A full-match "more
-    # than" (no second half) must also stay out — it isn't a 2H race.
-    assert not derive.is_sot_race(
+def test_leading_second_half_form_is_now_a_race():
+    # issue #4 closed: the leading "In the second half, will..." phrasing now matches
+    # is_sot_race (and dispatches to h_sot_race_h2 via the added HANDLERS regex), so it
+    # gets the validated goal-share + de-compression treatment instead of a placeholder.
+    # A full-match "more than" (no second half) must still stay out — it isn't a 2H race.
+    assert derive.is_sot_race(
         "In the second half, will Tunisia have more shots on target than Japan?")
     assert not derive.is_sot_race("Will Brazil have more shots on target than Serbia?")
 

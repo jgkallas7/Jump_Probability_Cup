@@ -60,8 +60,11 @@ QTYPE_RULES: list[tuple[str, str, str]] = [
     # match-goals total. Must precede the generic goal-totals rules below (the
     # "more than ... goal" catch-all was mis-mapping it to totals -> placeholder).
     (r"any player score (more than (1|one)|2 or more) goals?", "brace", "NO_MARKET"),
+    # Half goal-totals: no whitelisted book quotes them and Kalshi half-totals are
+    # flagged off, so they only ever reached the placeholder -> route to derive,
+    # which prices them off the match lambda x half goal-share (h_half_total_goals).
     (r"(first|second) half .*\d+ or (fewer|less|more) total goals",
-     "total_half", "totals_half"),
+     "total_half", "NO_MARKET"),
     (r"score (at least \d+|\d+ or more total) goal", "team_total", "team_totals"),
     (r"\d+ or (fewer|less|more) total goals", "total", "totals"),
     (r"(over|under|more than|fewer than|at least) .*(goal|goals)", "total", "totals"),

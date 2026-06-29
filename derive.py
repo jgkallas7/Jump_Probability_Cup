@@ -144,22 +144,16 @@ def is_sot_race(text: str) -> bool:
     WC_SOT_RACE_DECOMP scope — _route_race_to_goal_share, _apply_race_decomp and the
     review_report gate all key off this, so live and validated scope can't drift.
 
-    Matches the h_sot_race_h2 handler's scope EXACTLY: the phrase 'more shots on
-    target than' with 'in the second half' occurring AFTER it (the trailing form,
-    45 of 54 settled race questions). The contest ALSO asks ~9 in the leading form
-    ('In the second half, will X have more shots on target than Y?'), which this
-    deliberately does NOT match: h_sot_race_h2's dispatch regex is trailing-only, AND
-    qmodel's is case-sensitive 'Will', so the leading form is missed by BOTH pricers
-    today and falls to the placeholder base rate — a pre-existing bug, out of scope
-    here (fixing it would change production for flags-OFF, breaking the no-op
-    guarantee; tracked as follow-up). Excluding it keeps is_sot_race ⟹ 'h_sot_race_h2
-    can price this', so WC_SOT_RACE_GS routing can never block qmodel and then strand
-    the question at the placeholder. Requires 'than', so it stays mutually exclusive
-    with is_sot_threshold (which excludes '...more ... than ...')."""
+    Matches the h_sot_race_h2 handler's scope: 'more shots on target than' together
+    with 'in the second half', in EITHER order — the trailing form ('Will X have more
+    SOT than Y in the second half?', 45/54 settled) and the leading form ('In the
+    second half, will X have more SOT than Y?', ~9). Both now dispatch to h_sot_race_h2
+    (the leading regex was added 2026-06-29, closing the old issue #4 where the leading
+    form fell to the placeholder), so is_sot_race ⟹ 'h_sot_race_h2 can price this' still
+    holds — WC_SOT_RACE_GS routing can never strand the question at the placeholder.
+    Requires 'than', so it stays mutually exclusive with is_sot_threshold."""
     t = text.lower()
-    if "more shots on target than" not in t or "in the second half" not in t:
-        return False
-    return t.index("in the second half") > t.index("more shots on target than")
+    return "more shots on target than" in t and "in the second half" in t
 
 
 def _route_race_to_goal_share(text):
@@ -253,6 +247,7 @@ BASE = {
     "h2_sot_share": 0.54,
     "h1_corner_share": 0.44,
     "brace_share": 0.42,       # P(a team's multi-goal haul is one player's brace)
+    "goal_share_first30": 0.21,  # share of match goals before the ~30' hydration break
 }
 
 
@@ -624,6 +619,10 @@ HANDLERS = [
     (r"Will (.+?) commit more fouls than", h_fouls_race),
     (r"Will (.+?) have more shots on target than .+? in the second half",
      h_sot_race_h2),
+    # leading form ('In the second half, will X have more SOT than Y?') — same
+    # pricer, was issue #4 (missed by both pricers -> placeholder); now covered.
+    (r"[Ii]n the second half, will (.+?) have more shots on target than",
+     h_sot_race_h2),
     (r"Will the second half have more (?:total )?goals than the first half",
      h_h2_gt_h1),
     (r"Will (.+?) score the first goal of the second half", h_first_goal_h2),
@@ -676,12 +675,43 @@ def h_any_player_brace(m, g, conn, now):
     return p, "derived", f"any-brace lam={lh:.2f}/{la:.2f} share={share:.2f}"
 
 
+def h_goal_before_hydration(m, g, conn, now):
+    """'Will a goal be scored before the first hydration break?' — the first WC
+    cooling break is ~30', so this is P(>=1 goal in the first ~30 min). Poisson on
+    the first-30 goal share of the match lambda (goals are back-loaded, so ~0.21
+    of them land before 30', not 30/90=0.33)."""
+    _, _, lt = match_lambdas(conn, m, now)
+    lam30 = lt * BASE["goal_share_first30"]
+    return 1 - math.exp(-lam30), "derived", f"goal-by-1st-break lam30={lam30:.2f}"
+
+
+def h_half_total_goals(m, g, conn, now):
+    """'Will the {first,second} half have N or more total goals?' — no whitelisted
+    book quotes half totals (Kalshi half-totals are flagged off), so derive from the
+    match lambda x the half's goal share. Prefers the half-totals book line if one
+    is ever quoted."""
+    half, k, direction = g.group(1).lower(), int(g.group(2)), g.group(3).lower()
+    _, _, lt = match_lambdas(conn, m, now)
+    share = BASE["h2_goal_share"] if half == "second" else 1 - BASE["h2_goal_share"]
+    lam = lt * share
+    under = direction in ("fewer", "less")
+    mkt = "totals_h2" if half == "second" else "totals_h1"
+    p = mprob(conn, m["match_id"], mkt, "Under" if under else "Over",
+              (k + 0.5) if under else (k - 0.5), now)
+    if p is None:                                  # P(<=k) for 'fewer', P(>=k) for 'more'
+        p = (1 - p_geq(lam, k + 1)) if under else p_geq(lam, k)
+    return p, "derived", f"{half[0]}H goals {'<=' if under else '>='}{k} lam={lam:.2f}"
+
+
 # Tried as a FALLBACK only (after qmodel + HANDLERS), and only when PH_COVERAGE_ON.
 COVERAGE_HANDLERS = [
     (r"(?:regulation|the match|match).*end in a tie|end in a tie", h_ends_in_tie),
     (r"[Ww]ill (.+?) be (?:ahead|leading|in front) at halftime", h_ahead_at_halftime),
     (r"any player score (?:more than (?:1|one)|2 or more) goals?",
      h_any_player_brace),
+    (r"goal.*before the first hydration break", h_goal_before_hydration),
+    (r"(first|second) half have (\d+) or (more|fewer|less) total goals",
+     h_half_total_goals),
 ]
 
 

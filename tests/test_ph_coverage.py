@@ -95,3 +95,59 @@ def test_coverage_is_flag_gated(monkeypatch):
     monkeypatch.setattr(derive, "PH_COVERAGE_ON", True)
     res = derive.derive_question(conn, q, now)
     assert res is not None and abs(res[0] - 0.28) < 1e-9
+
+
+# ---- derivable remainders: hydration goal, half totals, SOT-race leading form ----
+
+def _lam_snaps(conn):
+    # total ~2.4 goals, home modest favourite -> match_lambdas resolvable
+    _snap(conn, "totals", "Under", 2.5, 0.58)
+    _snap(conn, "h2h", "A", None, 0.45)
+
+
+def test_goal_before_hydration_prices_from_lambda():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    _lam_snaps(conn)
+    m = {"match_id": "M1", "home": "A", "away": "B"}
+    g = re.search(derive.COVERAGE_HANDLERS[3][0],
+                  "Will a goal be scored before the first hydration break?")
+    assert g is not None
+    p, tier, _ = derive.h_goal_before_hydration(m, g, conn, now)
+    assert 0.30 < p < 0.55 and tier == "derived"   # ~0.42, not the flat placeholder
+
+
+def test_half_total_goals_prices_from_lambda():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    _lam_snaps(conn)
+    m = {"match_id": "M1", "home": "A", "away": "B"}
+    g = re.search(derive.COVERAGE_HANDLERS[4][0],
+                  "Will the second half have 2 or more total goals?")
+    assert g is not None
+    p, tier, _ = derive.h_half_total_goals(m, g, conn, now)
+    assert 0.25 < p < 0.55 and tier == "derived"
+
+
+def test_half_total_goals_now_routes_to_derive():
+    from ingest_questions import classify
+    assert classify("Will the second half have 2 or more total goals "
+                    "in regulation?")[1] == "NO_MARKET"
+
+
+def test_sot_race_leading_form_is_a_race_both_orders():
+    assert derive.is_sot_race("In the second half, will Germany have more "
+                              "shots on target than Paraguay?")
+    assert derive.is_sot_race("Will Germany have more shots on target than "
+                              "Paraguay in the second half?")          # trailing still
+    assert not derive.is_sot_race("Will Germany have more corner kicks than Spain?")
+
+
+def test_sot_race_leading_form_routes_to_pricer():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    _lam_snaps(conn)
+    q = {"text": "In the second half, will A have more shots on target than B?",
+         "match_id": "M1", "home": "A", "away": "B"}
+    res = derive.derive_question(conn, q, now)        # qmodel/kalshi off in tests
+    assert res is not None and 0.0 < res[0] < 1.0     # priced, not stranded

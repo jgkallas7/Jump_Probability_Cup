@@ -235,3 +235,12 @@ matches "In the second half, will...". Fixing needs a broadened dispatch (handle
 case) in BOTH derive HANDLERS and qmodel — but that CHANGES production for flags-OFF (placeholder →
 goal-share), so it can't ride in this no-op-until-flipped PR. Track as its own change; mirror the
 corners-race handler which already accepts the leading form.
+
+## 2026-06-26 — auto review (review_report.py)
+Realized edge vs consensus clone: -178. Flag-validation gate + per-bucket edges in `data/reviews/2026-06-26.md`.
+
+## 2026-06-27 — auto review (review_report.py)
+Realized edge vs consensus clone: -186. Flag-validation gate + per-bucket edges in `data/reviews/2026-06-27.md`.
+
+## 2026-06-28 — auto review (review_report.py)
+Realized edge vs consensus clone: -186. Flag-validation gate + per-bucket edges in `data/reviews/2026-06-28.md`.

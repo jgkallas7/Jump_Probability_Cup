@@ -36,7 +36,15 @@ FAMILIES = [
      "both teams >=1 SOT full match — near-certain, field underrates"),
     (r"score or assist", 0.24, "attacking player score-or-assist family base"),
     (r"score a goal \(excluding own goals\)", 0.18, "anytime scorer family base"),
-    (r"have \d+ or more shots on target", 0.55, "featured-player 1+ SOT family base"),
+    # Player SOT props with NO book line fall here. Recalibrated from settled data
+    # 2026-06-29 (these were bleeding ~17pt at the old flat values): a player's
+    # "at least 1 shot on target" resolves YES only ~0.23 (n=39 settled) — matching
+    # the WC_PLAYER_SOT_ANCHOR over-pricing edge, so 0.25 also beats the high field.
+    # "2 or more" must be BELOW that (monotonic) — 0.55 was logically impossible.
+    (r"at least 1 shot on target", 0.25,
+     "player 1+ SOT no-line — realized 0.231 over n=39 settled (anchor edge)"),
+    (r"have \d+ or more shots on target", 0.15,
+     "player 2+ SOT no-line — must be < the 0.23 single-SOT rate (monotonic)"),
     (r"shots on target", 0.50, "SOT comparison/count family base"),
     (r"score the first goal of the game and", 0.18, "first-goal AND combo family base"),
     (r"score the first goal", 0.35, "team first-goal family base"),
@@ -51,7 +59,7 @@ FAMILIES = [
     (r"tied at halftime|match be tied", 0.33, "HT draw base"),
     (r"be winning", 0.35, "HT leader family base"),
     (r"more goals than the first half", 0.46, "2H>1H strict, tie drag"),
-    (r"", 0.45, "unclassified fallback — shaded under 50 (most Will-X props skew No)"),
+    (r"", 0.35, "unclassified fallback — realized 0.34 over n=32 settled (non-SOT residual)"),
 ]
 
 

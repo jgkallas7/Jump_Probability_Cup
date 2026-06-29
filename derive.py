@@ -248,6 +248,7 @@ BASE = {
     "h1_corner_share": 0.44,
     "brace_share": 0.42,       # P(a team's multi-goal haul is one player's brace)
     "goal_share_first30": 0.21,  # share of match goals before the ~30' hydration break
+    "sot_brace_share": 0.50,   # P(a team's multi-SOT haul concentrates 2+ in one player)
 }
 
 
@@ -675,6 +676,39 @@ def h_any_player_brace(m, g, conn, now):
     return p, "derived", f"any-brace lam={lh:.2f}/{la:.2f} share={share:.2f}"
 
 
+def h_any_player_sot_brace(m, g, conn, now):
+    """'Will any player record 2+ shots on target?' — the SOT analogue of the goal
+    brace, and far more common (a star routinely gets 2+ SOT). The OLD flat 0.50
+    placeholder bled here (field ~0.70). Team SOT lambda x a concentration share,
+    split by SOT share. UNVERIFIED & 'base' tier: the results feed has no player-SOT,
+    so this can't auto-settle — it's field-anchored (lands ~0.70), watch via the UI."""
+    _, _, lt = match_lambdas(conn, m, now)
+    sot_tot = BASE["sot_lambda"] * (lt / BASE["goals_lambda"])
+    sh = sot_share(conn, m, m["home"], now)
+    share = BASE["sot_brace_share"]
+
+    def tb(lam):                                # P(team records >=2 SOT) * concentration
+        return (1 - math.exp(-lam) * (1 + lam)) * share
+
+    p = 1 - (1 - tb(sot_tot * sh)) * (1 - tb(sot_tot * (1 - sh)))
+    return p, "base", f"any-2sot sot={sot_tot:.1f} share={share}"
+
+
+def h_team_first_goal_match(m, g, conn, now):
+    """'Will <team> score the first goal of the match?' — the flat 0.35 placeholder
+    ignored favorite strength (Germany at 0.35 vs a 0.72 win prob). For two Poisson
+    scoring processes P(team first) = goal_share x P(>=1 goal in the match)."""
+    team = resolve_team(g.group(1), m["home"], m["away"])
+    if not team:
+        return None
+    lh, la, _ = match_lambdas(conn, m, now)
+    lam_t, lam_o = (lh, la) if team == m["home"] else (la, lh)
+    if lam_t + lam_o <= 0:
+        return None
+    p = lam_t / (lam_t + lam_o) * (1 - math.exp(-(lh + la)))
+    return p, "derived", f"first-goal share={lam_t / (lam_t + lam_o):.2f}"
+
+
 def h_goal_before_hydration(m, g, conn, now):
     """'Will a goal be scored before the first hydration break?' — the first WC
     cooling break is ~30', so this is P(>=1 goal in the first ~30 min). Poisson on
@@ -709,6 +743,9 @@ COVERAGE_HANDLERS = [
     (r"[Ww]ill (.+?) be (?:ahead|leading|in front) at halftime", h_ahead_at_halftime),
     (r"any player score (?:more than (?:1|one)|2 or more) goals?",
      h_any_player_brace),
+    (r"any player (?:record|have) \d+ or more shots on target",
+     h_any_player_sot_brace),
+    (r"[Ww]ill (.+?) score the first goal of the match", h_team_first_goal_match),
     (r"goal.*before the first hydration break", h_goal_before_hydration),
     (r"(first|second) half have (\d+) or (more|fewer|less) total goals",
      h_half_total_goals),

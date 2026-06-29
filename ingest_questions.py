@@ -65,7 +65,9 @@ QTYPE_RULES: list[tuple[str, str, str]] = [
     # which prices them off the match lambda x half goal-share (h_half_total_goals).
     (r"(first|second) half .*\d+ or (fewer|less|more) total goals",
      "total_half", "NO_MARKET"),
-    (r"score (at least \d+|\d+ or more total) goal", "team_total", "team_totals"),
+    # "total" optional: "score 2 or more goals" is a team total just like "...total
+    # goals" (the knockout phrasing dropped "total" and was hitting the placeholder).
+    (r"score (?:at least \d+|\d+ or more)(?: total)? goals?", "team_total", "team_totals"),
     (r"\d+ or (fewer|less|more) total goals", "total", "totals"),
     (r"(over|under|more than|fewer than|at least) .*(goal|goals)", "total", "totals"),
     (r"advance|qualify|progress|next round", "advancement", "to_advance"),

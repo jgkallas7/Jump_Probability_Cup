@@ -20,9 +20,8 @@ import derive
 from devig import shrink_extremes
 
 # Reuse the live router's exact regexes (their capture groups feed the handlers).
-_LABELS = ["tie->draw", "ahead-HT->h1_3way", "brace->lambda"]
-TARGETS = [(_LABELS[i], pat, fn)
-           for i, (pat, fn) in enumerate(derive.COVERAGE_HANDLERS)]
+TARGETS = [(fn.__name__.replace("h_", ""), pat, fn)
+           for pat, fn in derive.COVERAGE_HANDLERS]
 
 
 def _placeholder_prob(conn, qid):

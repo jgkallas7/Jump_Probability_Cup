@@ -41,7 +41,13 @@ FAMILIES = [
     # "at least 1 shot on target" resolves YES only ~0.23 (n=39 settled) — matching
     # the WC_PLAYER_SOT_ANCHOR over-pricing edge, so 0.25 also beats the high field.
     # "2 or more" must be BELOW that (monotonic) — 0.55 was logically impossible.
-    (r"at least 1 shot on target", 0.25,
+    # 'any player' SOT brace — near-certain (field ~0.70). derive prices it live
+    # (h_any_player_sot_brace); this only backstops. Must precede the per-player rules.
+    (r"any player (?:record|have) \d+ or more shots on target", 0.72,
+     "any-player 2+ SOT — near-certain, field ~0.70"),
+    # a SINGLE player's 1+ SOT (either phrasing). Distinct from 2+ below — the old
+    # rule lumped '1 or more shots' into the 2+ rate (0.15); 1+ realized 0.231 (n=39).
+    (r"at least 1 shot on target|1 or more shots? on target", 0.25,
      "player 1+ SOT no-line — realized 0.231 over n=39 settled (anchor edge)"),
     (r"have \d+ or more shots on target", 0.15,
      "player 2+ SOT no-line — must be < the 0.23 single-SOT rate (monotonic)"),

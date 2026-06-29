@@ -17,6 +17,20 @@ def test_player_two_plus_sot_below_one_plus():
     assert p < 0.25
 
 
+def test_player_one_or_more_shots_plural_is_not_the_2plus_rate():
+    # regression: "1 or more shots on target" (plural) was wrongly hitting the 2+
+    # rule (0.15); it is a 1+ question and must get the 0.25 single-SOT rate.
+    p, _ = placeholder_for("Will Julio Enciso have 1 or more shots on target "
+                           "in regulation?")
+    assert p == 0.25
+
+
+def test_any_player_sot_brace_backstop_is_high():
+    # "any player record 2+ SOT" is near-certain (field ~0.70), not the 0.50 generic
+    p, _ = placeholder_for("Will any player record 2 or more shots on target?")
+    assert p == 0.72
+
+
 def test_unclassified_catch_all_recalibrated():
     # residual (non-SOT) catch-all realized ~0.34 over n=32 — was a too-high 0.45
     p, why = placeholder_for("Will a substitute score a goal in regulation?")

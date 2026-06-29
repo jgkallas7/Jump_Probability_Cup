@@ -165,7 +165,10 @@ def map_question(text: str, mapping: str, home: str, away: str):
     t = text.strip()
 
     if mapping == "h2h":
-        m = re.match(r"Will (.+?) win the match\?", t)
+        # "win the match" (group) OR "win in regulation (90 min + stoppage)" (the
+        # knockout phrasing) — both are the 90-min match winner -> h2h. No trailing
+        # \? so the "(90 minutes + stoppage time)" suffix doesn't break the match.
+        m = re.match(r"Will (.+?) win (?:the match|in regulation)", t)
         if m:
             team = resolve_team(m.group(1), home, away)
             return ("h2h", team, None) if team else None
@@ -203,8 +206,10 @@ def map_question(text: str, mapping: str, home: str, away: str):
         return None
 
     if mapping == "team_totals":
-        m = re.match(r"Will (.+?) score (?:at least (\d+)|(\d+) or more total) "
-                     r"goals?\?", t)
+        # "total" is optional ("score 2 or more goals" == "...2 or more total goals")
+        # and no trailing \? (handles the "in regulation (90 min...)" suffix).
+        m = re.match(r"Will (.+?) score (?:at least (\d+)|(\d+) or more)(?: total)? "
+                     r"goals?", t)
         if m:
             team = resolve_team(m.group(1), home, away)
             n = int(m.group(2) or m.group(3))

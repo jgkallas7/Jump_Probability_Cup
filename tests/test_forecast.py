@@ -50,6 +50,27 @@ def test_h2h_mapping_with_alias():
                         "Mexico", "South Africa") == ("h2h", "Draw", None)
 
 
+def test_win_in_regulation_maps_to_h2h():
+    # knockout phrasing for the match winner — must reach h2h, not the placeholder
+    assert map_question("Will Germany win in regulation (90 minutes + stoppage time)?",
+                        "h2h", "Germany", "Paraguay") == ("h2h", "Germany", None)
+    # group phrasing still works
+    assert map_question("Will Mexico win the match?", "h2h",
+                        "Mexico", "South Africa") == ("h2h", "Mexico", None)
+
+
+def test_team_total_without_the_word_total():
+    from ingest_questions import classify
+    # "score 2 or more goals" (no 'total') is a team total, with the KO suffix
+    assert classify("Will Brazil score 2 or more goals in regulation "
+                    "(90 minutes + stoppage time)?")[1] == "team_totals"
+    assert map_question("Will Brazil score 2 or more goals in regulation "
+                        "(90 minutes + stoppage time)?", "team_totals",
+                        "Brazil", "Japan") == ("team_totals", "Brazil Over", 1.5)
+    # the brace ("any player score 2 or more goals") must NOT become a team total
+    assert classify("Will any player score 2 or more goals?")[1] == "NO_MARKET"
+
+
 def test_totals_mapping_thresholds():
     assert map_question("Will the match have 2 or fewer total goals?", "totals",
                         "A", "B") == ("totals", "Under", 2.5)

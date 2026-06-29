@@ -110,7 +110,7 @@ def test_goal_before_hydration_prices_from_lambda():
     now = datetime.now(timezone.utc)
     _lam_snaps(conn)
     m = {"match_id": "M1", "home": "A", "away": "B"}
-    g = re.search(derive.COVERAGE_HANDLERS[3][0],
+    g = re.search(r"goal.*before the first hydration break",
                   "Will a goal be scored before the first hydration break?")
     assert g is not None
     p, tier, _ = derive.h_goal_before_hydration(m, g, conn, now)
@@ -122,7 +122,7 @@ def test_half_total_goals_prices_from_lambda():
     now = datetime.now(timezone.utc)
     _lam_snaps(conn)
     m = {"match_id": "M1", "home": "A", "away": "B"}
-    g = re.search(derive.COVERAGE_HANDLERS[4][0],
+    g = re.search(r"(first|second) half have (\d+) or (more|fewer|less) total goals",
                   "Will the second half have 2 or more total goals?")
     assert g is not None
     p, tier, _ = derive.h_half_total_goals(m, g, conn, now)
@@ -151,3 +151,29 @@ def test_sot_race_leading_form_routes_to_pricer():
          "match_id": "M1", "home": "A", "away": "B"}
     res = derive.derive_question(conn, q, now)        # qmodel/kalshi off in tests
     assert res is not None and 0.0 < res[0] < 1.0     # priced, not stranded
+
+
+def test_any_player_sot_brace_is_high_not_a_coin_flip():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    _lam_snaps(conn)
+    m = {"match_id": "M1", "home": "A", "away": "B"}
+    g = re.search(r"any player (?:record|have) \d+ or more shots on target",
+                  "Will any player record 2 or more shots on target?")
+    p, tier, _ = derive.h_any_player_sot_brace(m, g, conn, now)
+    assert 0.60 < p < 0.85 and tier == "base"   # ~0.70 (field), not the flat 0.50
+
+
+def test_team_first_goal_scales_with_favourite():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    _snap(conn, "totals", "Under", 2.5, 0.45)        # higher-scoring match
+    _snap(conn, "h2h", "A", None, 0.65)              # A is the clear favourite
+    m = {"match_id": "M1", "home": "A", "away": "B"}
+    fav = re.search(r"[Ww]ill (.+?) score the first goal of the match",
+                    "Will A score the first goal of the match?")
+    dog = re.search(r"[Ww]ill (.+?) score the first goal of the match",
+                    "Will B score the first goal of the match?")
+    pa, _, _ = derive.h_team_first_goal_match(m, fav, conn, now)
+    pb, _, _ = derive.h_team_first_goal_match(m, dog, conn, now)
+    assert pa > pb and pa > 0.45        # favourite well above the flat 0.35 placeholder

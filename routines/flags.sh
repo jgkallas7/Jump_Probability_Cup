@@ -92,3 +92,20 @@ export WC_SOT_RACE_DECOMP=1.5
 # matches _ADVANCE_RE against the first real R32 advancement question (else it falls
 # back to the placeholder — no harm — until the regex is widened).
 export WC_TO_ADVANCE_H2H=1
+# Placeholder-coverage router (default OFF, WC_PH_COVERAGE). Late-slate wording
+# (knockout "in regulation (90 min + stoppage)", "hydration break", brace) defeats
+# the classifier, so a growing share of NO_MARKET questions skip qmodel+handlers and
+# fall to the flat 0.45 placeholder (rate spiked ~15% -> 37% on 2026-06-28; settled
+# placeholder Qs realize ~2x the negative edge/Q of priced ones). The router fills the
+# cheap, high-confidence gaps with pricers we ALREADY own (derive.COVERAGE_HANDLERS):
+# "end in a tie" -> h2h draw (our un-renormalized draw edge); "ahead at halftime" ->
+# h2h_3_way_h1; "any player 2+ goals" -> a brace off team goal-lambdas. Runs as a
+# FALLBACK (never overrides qmodel/a HANDLER). DB-copy demo (2026-06-28): SA-Canada
+# brace 0.45->0.26 (field 0.25), tie 0.45->0.28 (field 0.30), ahead-HT 0.45->0.36
+# (field 0.44 — follows the sharp h1 market AWAY from the crowd, the real edge case).
+# DO NOT ENABLE until the settled gate clears: the new phrasings have not settled with
+# field data yet, so there is NO out-of-sample grade — run validate_ph_coverage.py
+# after the next /harvest-locked; flip to 1 only if coverage beats the placeholder.
+# Indirect support: the h2h_3_way_h1 market it routes to realized +3.46/Q over n=17 on
+# the old-phrasing equivalents; brace reproduces the field. 64/64 tests pass.
+export WC_PH_COVERAGE=0

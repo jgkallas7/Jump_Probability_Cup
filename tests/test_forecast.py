@@ -145,3 +145,33 @@ def test_consensus_weights_and_min_books():
 
     prob2, n2, _ = consensus(conn, "M1", "h2h", "Draw", None, now)
     assert prob2 is None and n2 == 0    # no quotes -> refuse, don't guess
+
+
+def test_stage_from_advance_target_round():
+    from ingest_questions import stage_from_advance
+    # the named round is what the team advances TO; stage = round it is IN
+    assert stage_from_advance("Will South Africa advance to the Round of 16?") == "r32"
+    assert stage_from_advance("Will Brazil advance to the Round of 32?") == "group"
+    assert stage_from_advance("Will France advance to the quarter-finals?") == "r16"
+    assert stage_from_advance("Will Spain advance to the semi-finals?") == "qf"
+    assert stage_from_advance("Will Italy advance to the final?") == "sf"
+    # not an advancement question -> no signal
+    assert stage_from_advance("Will Brazil win the match?") is None
+
+
+def test_backfill_stages_promotes_only_knockouts():
+    from ingest_questions import backfill_stages
+    conn = dbmod.init(":memory:")
+    conn.execute("INSERT INTO matches(match_id, home, away, kickoff_utc) "
+                 "VALUES ('KO','South Africa','Canada','2026-06-28T19:00:00Z')")
+    conn.execute("INSERT INTO matches(match_id, home, away, kickoff_utc) "
+                 "VALUES ('GRP','A','B','2026-06-20T19:00:00Z')")
+    conn.execute("""INSERT INTO questions(qid, match_id, qtype, text, status,
+                    market_mapping) VALUES
+                    ('q1','KO','advancement',
+                     'Will South Africa advance to the Round of 16?','open','to_advance')""")
+    assert backfill_stages(conn) == 1                      # only the KO match moves
+    rows = {r["match_id"]: r["stage"] for r in
+            conn.execute("SELECT match_id, stage FROM matches")}
+    assert rows["KO"] == "r32" and rows["GRP"] == "group"  # group untouched (default)
+    assert backfill_stages(conn) == 0                      # idempotent

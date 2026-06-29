@@ -95,6 +95,21 @@ RACE_DECOMP = float(os.environ.get("WC_SOT_RACE_DECOMP", "1.0"))
 # FORWARD-validate (watch the SOT-race bucket edge in review_report). Default OFF.
 RACE_GS_ON = os.environ.get("WC_SOT_RACE_GS", "") == "1"
 
+# --- Placeholder-coverage router (WC_PH_COVERAGE) ----------------------------
+# The late-slate question wording (knockout-era "in regulation (90 minutes +
+# stoppage time)", "hydration break", brace/"any player score more than 1 goal")
+# defeats the classifier, so a growing share of NO_MARKET questions reach neither
+# qmodel nor a handler and fall to the flat 0.45 placeholder (rate spiked from
+# ~15% to 37% on 2026-06-28). Placeholder Qs realize ~2x the negative edge/Q of
+# priced ones. The cheap, high-confidence wins reuse pricers we ALREADY own and
+# only failed on wording: "end in a tie" == the h2h draw (our standing not-
+# renormalized draw edge); "ahead at halftime" == the 1st-half h2h_3_way_h1
+# winner; "any player score 2+ goals" == a brace, priced off team goal-lambdas.
+# These run as a FALLBACK after qmodel + the standard HANDLERS (never override a
+# real pricer) and only when this flag is on. Default OFF — forward-validate the
+# re-priced-vs-placeholder edge on settled questions (parse_locked) before flip.
+PH_COVERAGE_ON = os.environ.get("WC_PH_COVERAGE", "") == "1"
+
 
 def is_sot_threshold(text: str) -> bool:
     """A 'shots on target' threshold question THIS FLAG SHOULD ANCHOR. Single
@@ -237,6 +252,7 @@ BASE = {
     "h2_corner_share": 0.56,
     "h2_sot_share": 0.54,
     "h1_corner_share": 0.44,
+    "brace_share": 0.42,       # P(a team's multi-goal haul is one player's brace)
 }
 
 
@@ -622,6 +638,53 @@ def h_btts_and_total(m, k, conn, now):
     return p, "derived", f"btts+O{k-0.5} joint poisson {lh:.2f}/{la:.2f}"
 
 
+# ---- WC_PH_COVERAGE handlers: reuse pricers we already own for questions the ----
+# ---- classifier dropped to the flat placeholder (see PH_COVERAGE_ON above). ----
+
+def h_ends_in_tie(m, g, conn, now):
+    """'Will regulation end in a tie?' is the match draw. Price off the h2h draw
+    consensus (kept deliberately un-renormalized — our standing draw edge)."""
+    p = mprob(conn, m["match_id"], "h2h", "Draw", None, now)
+    if p is None:
+        return None
+    return p, "derived", f"ends-in-tie<-h2h draw {p:.3f}"
+
+
+def h_ahead_at_halftime(m, g, conn, now):
+    """'Will <team> be ahead at halftime?' is the 1st-half match-winner. Price
+    off the h2h_3_way_h1 consensus for that team."""
+    team = resolve_team(g.group(1), m["home"], m["away"])
+    if not team:
+        return None
+    p = mprob(conn, m["match_id"], "h2h_3_way_h1", team, None, now)
+    if p is None:
+        return None
+    return p, "derived", f"ahead-at-HT<-h2h_3way_h1 {p:.3f}"
+
+
+def h_any_player_brace(m, g, conn, now):
+    """'Will any player score 2+ goals?' — no book market. P(some player gets a
+    brace) from team goal-lambdas: a team's multi-goal haul is one player's brace
+    BRACE_SHARE of the time (P=22-31% across share 0.35-0.50; field-matched)."""
+    lh, la, _ = match_lambdas(conn, m, now)
+    share = BASE["brace_share"]
+
+    def team_brace(lam):                      # P(team scores >=2) * P(it's one player)
+        return (1 - math.exp(-lam) * (1 + lam)) * share
+
+    p = 1 - (1 - team_brace(lh)) * (1 - team_brace(la))
+    return p, "derived", f"any-brace lam={lh:.2f}/{la:.2f} share={share:.2f}"
+
+
+# Tried as a FALLBACK only (after qmodel + HANDLERS), and only when PH_COVERAGE_ON.
+COVERAGE_HANDLERS = [
+    (r"(?:regulation|the match|match).*end in a tie|end in a tie", h_ends_in_tie),
+    (r"[Ww]ill (.+?) be (?:ahead|leading|in front) at halftime", h_ahead_at_halftime),
+    (r"any player score (?:more than (?:1|one)|2 or more) goals?",
+     h_any_player_brace),
+]
+
+
 def derive_question(conn, q, now):
     text = q["text"]
     m = {"match_id": q["match_id"], "home": q["home"], "away": q["away"]}
@@ -638,6 +701,14 @@ def derive_question(conn, q, now):
         for pattern, fn in HANDLERS:
             if fn is None:
                 continue
+            g = re.search(pattern, text)
+            if g:
+                res = fn(m, g, conn, now)
+                break
+    # WC_PH_COVERAGE: last-resort router for classifier-dropped questions that map
+    # to pricers we already own. Fallback only — never overrides qmodel/a HANDLER.
+    if res is None and PH_COVERAGE_ON:
+        for pattern, fn in COVERAGE_HANDLERS:
             g = re.search(pattern, text)
             if g:
                 res = fn(m, g, conn, now)

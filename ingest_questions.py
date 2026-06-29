@@ -56,6 +56,10 @@ QTYPE_RULES: list[tuple[str, str, str]] = [
     (r"both teams .*score and", "btts_combo", "NO_MARKET"),
     (r"both teams .*score", "btts", "btts"),
     (r"clean sheet", "btts", "btts_derived"),
+    # Brace: "any player score more than 1 goal" has NO book market — it is NOT a
+    # match-goals total. Must precede the generic goal-totals rules below (the
+    # "more than ... goal" catch-all was mis-mapping it to totals -> placeholder).
+    (r"any player score (more than (1|one)|2 or more) goals?", "brace", "NO_MARKET"),
     (r"(first|second) half .*\d+ or (fewer|less|more) total goals",
      "total_half", "totals_half"),
     (r"score (at least \d+|\d+ or more total) goal", "team_total", "team_totals"),
@@ -73,6 +77,50 @@ def classify(text: str) -> tuple[str, str]:
         if re.search(pattern, t):
             return qtype, mapping
     return "other", "NO_MARKET"
+
+
+# Stage signal. The schedule feed (Odds API events) carries NO round, so every
+# match defaults to 'group' (db.py) — which silently strips calibrate.py's 2x/3x
+# knockout multiplier (STAGE_MULTIPLIER) off every knockout game. The contest's own
+# advancement question is the reliable signal: it names the round a team advances
+# TO, so the match's stage is the round the team is currently IN. Order matters:
+# "round of N" before the generic "final" (which also matches "semi-final").
+_ADV_TARGET_TO_STAGE = [
+    (r"round of 32", "group"),
+    (r"round of 16", "r32"),
+    (r"quarter[- ]?final", "r16"),
+    (r"semi[- ]?final", "qf"),
+    (r"\bfinal\b", "sf"),       # advance TO the final => currently in the semis
+]
+
+
+def stage_from_advance(text: str) -> str | None:
+    """Knockout stage of a match from its 'Will X advance to <round>?' question,
+    or None if not an advancement question / round unrecognised. Returns 'group'
+    for a group->R32 advance (left as the default; we only ever PROMOTE to KO)."""
+    t = text.lower()
+    if not re.search(r"advance|qualify|progress|reach|go through", t):
+        return None
+    for pat, stage in _ADV_TARGET_TO_STAGE:
+        if re.search(pat, t):
+            return stage
+    return None
+
+
+def backfill_stages(conn) -> int:
+    """Promote matches to their knockout stage from existing advancement questions.
+    Idempotent; never downgrades (only writes KO stages, never 'group')."""
+    n = 0
+    for r in conn.execute("""SELECT match_id, text FROM questions
+                             WHERE market_mapping='to_advance'""").fetchall():
+        st = stage_from_advance(r["text"])
+        if st and st != "group":
+            cur = conn.execute(
+                "UPDATE matches SET stage=? WHERE match_id=? AND stage!=?",
+                (st, r["match_id"], st))
+            n += cur.rowcount
+    conn.commit()
+    return n
 
 
 def norm_team(s: str) -> str:
@@ -228,6 +276,11 @@ def main() -> None:
              deadline, mk.get("status", "open"), mapping))
         total_q += 1
     conn.commit()
+
+    promoted = backfill_stages(conn)
+    if promoted:
+        print(f"stage: promoted {promoted} match(es) to a knockout stage "
+              f"from advancement questions")
 
     print(f"\n{total_q} questions ingested")
     print("by mapping:", dict(sorted(by_mapping.items(), key=lambda x: -x[1])))

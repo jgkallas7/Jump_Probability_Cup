@@ -103,9 +103,13 @@ export WC_TO_ADVANCE_H2H=1
 # FALLBACK (never overrides qmodel/a HANDLER). DB-copy demo (2026-06-28): SA-Canada
 # brace 0.45->0.26 (field 0.25), tie 0.45->0.28 (field 0.30), ahead-HT 0.45->0.36
 # (field 0.44 — follows the sharp h1 market AWAY from the crowd, the real edge case).
-# DO NOT ENABLE until the settled gate clears: the new phrasings have not settled with
-# field data yet, so there is NO out-of-sample grade — run validate_ph_coverage.py
-# after the next /harvest-locked; flip to 1 only if coverage beats the placeholder.
-# Indirect support: the h2h_3_way_h1 market it routes to realized +3.46/Q over n=17 on
-# the old-phrasing equivalents; brace reproduces the field. 64/64 tests pass.
-export WC_PH_COVERAGE=0
+# ENABLED 2026-06-28 on the same basis as WC_TO_ADVANCE_H2H / WC_KALSHI / WC_SOT_RACE_GS
+# (sane numbers + forward-watch, NOT a clean settled gate — market-derived prices have no
+# rescale gate). Justification on SETTLED data: the placeholder bucket it replaces is the
+# WORST we have (−0.86 edge/Q vs −0.42 priced) and is information-free (flat 0.45); the
+# markets it routes to are already validated (h2h_3_way_h1 +3.46/Q over n=17; h2h draw is
+# our standing edge); brace reproduces the field. Leaving placeholders is now 2x costly at
+# the KO multiplier. WATCH: run validate_ph_coverage.py after each /harvest-locked once
+# these settle, and the coverage bucket in parse_locked — flip OFF if it regresses (esp.
+# ahead-HT, which moves AWAY from the crowd toward the sharp h1 market). 66/66 tests pass.
+export WC_PH_COVERAGE=1

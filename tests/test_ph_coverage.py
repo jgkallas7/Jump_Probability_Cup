@@ -227,6 +227,19 @@ def test_score_both_halves_scales_with_team_strength():
     assert 0.25 < pa < 0.55                           # favourite ~field, dog far lower
 
 
+def test_card_in_first_half_is_high_not_a_coin_flip():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    # cards market quoted -> cards_lambda derived; first-half card is near-certain
+    _snap(conn, "alternate_totals_cards", "Over", 3.5, 0.60)
+    m = {"match_id": "M1", "home": "A", "away": "B"}
+    g = re.search(r"card be shown in the first half",
+                  "Will a card be shown in the first half?")
+    assert g is not None
+    p, tier, _ = derive.h_card_in_first_half(m, g, conn, now)
+    assert 0.60 < p < 0.85 and tier == "derived"   # ~0.72, not the flat 0.35
+
+
 def test_ko_gap_texts_route_through_coverage(monkeypatch):
     # all four must reach the coverage fallback (qmodel/kalshi off in tests), never strand
     conn = dbmod.init(":memory:")

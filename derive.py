@@ -787,6 +787,16 @@ def h_card_after_2nd_break(m, g, conn, now):
         f"card-after-2nd-break lam={lam_window:.2f} pET={p_et:.2f}"
 
 
+def h_card_in_first_half(m, g, conn, now):
+    """'Will a card be shown in the first half?' — P(>=1 card in H1). Total cards from
+    the cards market (or base) x the first-half share (cards are back-loaded, ~40% land
+    in H1; h2_card_share=0.60). A first-half card is a high-probability event (~0.72)
+    that the flat 0.35 placeholder badly understated -- a clear, market-anchored fix."""
+    lam_cards, _ = cards_lambda(conn, m, now)
+    lam_h1 = lam_cards * (1 - BASE["h2_card_share"])
+    return 1 - math.exp(-lam_h1), "derived", f"card-1H lam={lam_h1:.2f}"
+
+
 def h_substitute_scores(m, g, conn, now):
     """'Will a substitute score a goal?' — no market. Substitutes supply ~1/7 of
     goals (knockouts skew higher: deeper benches, late game-state subs, an extra-time
@@ -830,6 +840,7 @@ COVERAGE_HANDLERS = [
     (r"offside before the first hydration break",
      h_either_offside_before_hydration),
     (r"card.*after the second hydration break", h_card_after_2nd_break),
+    (r"card be shown in the first half", h_card_in_first_half),
     (r"[Ww]ill a substitute score a goal", h_substitute_scores),
     (r"[Ww]ill (.+?) score in both halves", h_score_both_halves),
     (r"(first|second) half have (\d+) or (more|fewer|less) total goals",

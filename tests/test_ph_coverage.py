@@ -166,6 +166,86 @@ def test_any_player_sot_brace_is_high_not_a_coin_flip():
     assert 0.60 < p < 0.85 and tier == "base"   # ~0.70 (field), not the flat 0.50
 
 
+# ---- knockout-wording placeholder gaps surfaced by the R32 games ----
+
+def test_either_offside_before_hydration_tracks_field():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    m = {"match_id": "M1", "home": "A", "away": "B"}
+    g = re.search(r"offside before the first hydration break",
+                  "Will either team be ruled offside before the first hydration break?")
+    assert g is not None
+    p, tier, _ = derive.h_either_offside_before_hydration(m, g, conn, now)
+    assert 0.45 < p < 0.62 and tier == "derived"   # field ~0.52, not flat 0.45
+
+
+def test_card_after_2nd_break_includes_extra_time():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    # P(regulation draw) drives the extra-time term -> a level KO prices higher
+    _snap(conn, "h2h", "Draw", None, 0.29)
+    m = {"match_id": "M1", "home": "A", "away": "B"}
+    g = re.search(r"card.*after the second hydration break",
+                  "Will a card be shown after the second hydration break, "
+                  "including any extra time?")
+    assert g is not None
+    p, tier, _ = derive.h_card_after_2nd_break(m, g, conn, now)
+    assert 0.55 < p < 0.75 and tier == "derived"   # field ~0.61, not flat 0.45
+    # the ET term must lift the price: a runaway favourite (tiny draw) prices lower
+    _snap(conn, "h2h", "Draw", None, 0.05, match_id="M2")
+    m2 = {"match_id": "M2", "home": "A", "away": "B"}
+    p_lo, _, _ = derive.h_card_after_2nd_break(m2, g, conn, now)
+    assert p_lo < p
+
+
+def test_substitute_scores_scales_with_goals():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    _snap(conn, "totals", "Under", 2.5, 0.55)        # ~2.5-goal match
+    _snap(conn, "h2h", "A", None, 0.45)
+    m = {"match_id": "M1", "home": "A", "away": "B"}
+    g = re.search(r"[Ww]ill a substitute score a goal",
+                  "Will a substitute score a goal in regulation?")
+    assert g is not None
+    p, tier, _ = derive.h_substitute_scores(m, g, conn, now)
+    assert 0.22 < p < 0.40 and tier == "derived"     # field ~0.30, not flat 0.45
+
+
+def test_score_both_halves_scales_with_team_strength():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    _snap(conn, "totals", "Under", 2.5, 0.40)        # higher-scoring match
+    _snap(conn, "h2h", "A", None, 0.62)              # A the clear favourite
+    m = {"match_id": "M1", "home": "A", "away": "B"}
+    fav = re.search(r"[Ww]ill (.+?) score in both halves",
+                    "Will A score in both halves of regulation?")
+    dog = re.search(r"[Ww]ill (.+?) score in both halves",
+                    "Will B score in both halves of regulation?")
+    pa, tier, _ = derive.h_score_both_halves(m, fav, conn, now)
+    pb, _, _ = derive.h_score_both_halves(m, dog, conn, now)
+    assert pa > pb and tier == "derived"
+    assert 0.25 < pa < 0.55                           # favourite ~field, dog far lower
+
+
+def test_ko_gap_texts_route_through_coverage(monkeypatch):
+    # all four must reach the coverage fallback (qmodel/kalshi off in tests), never strand
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    _snap(conn, "totals", "Under", 2.5, 0.50)
+    _snap(conn, "h2h", "A", None, 0.50)
+    _snap(conn, "h2h", "Draw", None, 0.28)
+    monkeypatch.setattr(derive, "PH_COVERAGE_ON", True)
+    for text in (
+        "Will either team be ruled offside before the first hydration break?",
+        "Will a card be shown after the second hydration break, including any extra time?",
+        "Will a substitute score a goal in regulation (90 minutes + stoppage time)?",
+        "Will A score in both halves of regulation (90 minutes + stoppage time)?",
+    ):
+        q = {"text": text, "match_id": "M1", "home": "A", "away": "B"}
+        res = derive.derive_question(conn, q, now)
+        assert res is not None and 0.0 < res[0] < 1.0, text
+
+
 def test_team_first_goal_scales_with_favourite():
     conn = dbmod.init(":memory:")
     now = datetime.now(timezone.utc)

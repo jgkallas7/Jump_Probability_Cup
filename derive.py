@@ -249,6 +249,14 @@ BASE = {
     "brace_share": 0.42,       # P(a team's multi-goal haul is one player's brace)
     "goal_share_first30": 0.21,  # share of match goals before the ~30' hydration break
     "sot_brace_share": 0.50,   # P(a team's multi-SOT haul concentrates 2+ in one player)
+    # --- knockout-wording placeholder-gap handlers (WC_PH_COVERAGE) ---
+    # shares set so the handlers land AT the field (offside ~0.52, card ~0.61), not
+    # above it: no basis to price over a roughly-calibrated crowd, and the thin R32
+    # settles (early offside NO x2, card-after-break NO) lean field-high if anything.
+    "offside_share_first30": 0.28,  # offsides ~uniform in time -> ~28% before the 30' break
+    "card_share_after75": 0.15,  # share of cards in the back-loaded last ~15'+stoppage window
+    "ko_extra_time_prob": 0.25,  # fallback P(regulation level -> extra time) when no h2h draw quote
+    "sub_goal_share": 0.14,    # share of match goals scored by substitutes (subs supply ~1/7)
 }
 
 
@@ -738,6 +746,64 @@ def h_half_total_goals(m, g, conn, now):
     return p, "derived", f"{half[0]}H goals {'<=' if under else '>='}{k} lam={lam:.2f}"
 
 
+def h_either_offside_before_hydration(m, g, conn, now):
+    """'Will either team be ruled offside before the first hydration break?' — the
+    ~30' cooling break, so P(>=1 MATCH offside in the first ~30 min). Offsides are
+    ~uniform in time (unlike back-loaded goals), so roughly a third land before 30'.
+    Total match offsides = both teams' base rate. The flat placeholder ignored that
+    a match almost always has an early offside (field ~0.52)."""
+    lam30 = 2 * BASE["offside_base"] * BASE["offside_share_first30"]
+    return 1 - math.exp(-lam30), "derived", \
+        f"either-offside-by-1st-break lam30={lam30:.2f}"
+
+
+def h_card_after_2nd_break(m, g, conn, now):
+    """'Will a card be shown after the second hydration break, including any extra
+    time?' — the ONE knockout question scoped to INCLUDE extra time. The 2nd cooling
+    break is ~75', so the window is the card-dense last ~15'+stoppage PLUS extra time
+    when the match is level after 90. Cards are back-loaded; ET only materialises with
+    P(regulation draw) but then adds 30 high-card minutes. Anchors total cards to the
+    cards market when quoted; the flat placeholder badly under-priced it (field ~0.61)."""
+    lam_cards, _ = cards_lambda(conn, m, now)
+    p_et = mprob(conn, m["match_id"], "h2h", "Draw", None, now)
+    if p_et is None:
+        p_et = BASE["ko_extra_time_prob"]
+    lam_window = lam_cards * BASE["card_share_after75"] \
+        + lam_cards * (30.0 / 90.0) * p_et
+    return 1 - math.exp(-lam_window), "derived", \
+        f"card-after-2nd-break lam={lam_window:.2f} pET={p_et:.2f}"
+
+
+def h_substitute_scores(m, g, conn, now):
+    """'Will a substitute score a goal?' — no market. Substitutes supply ~1/7 of
+    goals (knockouts skew higher: deeper benches, late game-state subs, an extra-time
+    sub window), so scale the match goal-lambda by that share -> P(>=1 sub goal).
+    Flat placeholder ~0.45 vs field ~0.30; this also scales up in high-scoring games."""
+    _, _, lt = match_lambdas(conn, m, now)
+    lam_sub = lt * BASE["sub_goal_share"]
+    return 1 - math.exp(-lam_sub), "derived", f"sub-scores lam={lam_sub:.2f}"
+
+
+def h_score_both_halves(m, g, conn, now):
+    """'Will <team> score in both halves of regulation?' — P(team scores in H1) x
+    P(team scores in H2), each a Poisson on the team's per-half goal-lambda (the 2nd
+    half carries the larger share). Independence is the SIGN-NEUTRAL default: half-to-
+    half scoring correlation is theoretically ambiguous (momentum is +, a favourite
+    game-managing a lead is -), so no dependence fudge. The structural win is on the
+    underdog side (~0.12, where a flat 0.45 placeholder is wildly high); on a favourite
+    it lands ~0.29 vs an observed field ~0.42 (n=1) — possibly the field over-weighting
+    dominance, possibly an independence under-bias. WATCH this bucket as it settles."""
+    team = resolve_team(g.group(1), m["home"], m["away"])
+    if not team:
+        return None
+    lh, la, _ = match_lambdas(conn, m, now)
+    lam_t = lh if team == m["home"] else la
+    h2 = BASE["h2_goal_share"]
+    p1 = 1 - math.exp(-lam_t * (1 - h2))
+    p2 = 1 - math.exp(-lam_t * h2)
+    return p1 * p2, "derived", f"both-halves lam={lam_t:.2f}"
+
+
 # Tried as a FALLBACK only (after qmodel + HANDLERS), and only when PH_COVERAGE_ON.
 COVERAGE_HANDLERS = [
     (r"(?:regulation|the match|match).*end in a tie|end in a tie", h_ends_in_tie),
@@ -748,6 +814,11 @@ COVERAGE_HANDLERS = [
      h_any_player_sot_brace),
     (r"[Ww]ill (.+?) score the first goal of the match", h_team_first_goal_match),
     (r"goal.*before the first hydration break", h_goal_before_hydration),
+    (r"offside before the first hydration break",
+     h_either_offside_before_hydration),
+    (r"card.*after the second hydration break", h_card_after_2nd_break),
+    (r"[Ww]ill a substitute score a goal", h_substitute_scores),
+    (r"[Ww]ill (.+?) score in both halves", h_score_both_halves),
     (r"(first|second) half have (\d+) or (more|fewer|less) total goals",
      h_half_total_goals),
 ]

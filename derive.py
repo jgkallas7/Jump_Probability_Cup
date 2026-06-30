@@ -561,10 +561,11 @@ def _player_prob(conn, match_id, market, player, suffix, now):
         return None
     clause = " AND ".join(["outcome LIKE ?"] * len(tokens)) + " AND outcome LIKE ?"
     cutoff = (now - timedelta(minutes=MAX_SNAP_AGE_MIN)).isoformat()
-    params = [match_id, market] + [f"%{t}%" for t in tokens] + [f"% {suffix}", cutoff]
+    params = [match_id, market] + [f"%{t}%" for t in tokens] \
+        + [f"% {suffix}", cutoff, now.isoformat()]   # ts<=now: no in-play leak in backtests
     rows = conn.execute(f"""
         SELECT book, fair_prob, divergence_pts, MAX(ts) ts FROM market_snapshots
-        WHERE match_id = ? AND market = ? AND {clause} AND ts >= ?
+        WHERE match_id = ? AND market = ? AND {clause} AND ts >= ? AND ts <= ?
         GROUP BY book""", params).fetchall()
     weights = dict(BOOK_WEIGHTS)
     for b, w in THIN_MARKET_EXTRA_WEIGHTS.items():

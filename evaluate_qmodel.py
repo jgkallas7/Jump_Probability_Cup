@@ -29,10 +29,14 @@ from derive import match_lambdas, BASE
 
 
 def _match_now(conn, match_id):
-    """Use the latest snapshot ts for this match as 'now' so the freshness
-    filter in match_lambdas picks up that match's pre-kickoff tape."""
-    row = conn.execute("SELECT MAX(ts) t FROM market_snapshots WHERE match_id=?",
-                       (match_id,)).fetchone()
+    """The latest snapshot ts AT OR BEFORE kickoff as 'now' — clamped pre-kickoff so
+    the backtest never derives goal-lambdas from in-play odds that already encode the
+    scoreline (audit: unbounded MAX(ts) was in-play for 40/77 matches)."""
+    row = conn.execute(
+        """SELECT MAX(s.ts) t FROM market_snapshots s
+           JOIN matches m ON m.match_id = s.match_id
+           WHERE s.match_id = ? AND s.ts <= m.kickoff_utc""",
+        (match_id,)).fetchone()
     if not row or not row["t"]:
         return None
     return datetime.fromisoformat(row["t"])

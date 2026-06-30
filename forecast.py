@@ -308,10 +308,13 @@ def consensus(conn, match_id: str, market: str, outcome: str,
         params.append(point)
     cutoff = (now - timedelta(minutes=MAX_SNAP_AGE_MIN)).isoformat()
     params.append(cutoff)
+    params.append(now.isoformat())   # upper bound: NEVER use a snapshot after `now`
+    # (live: now is wall-clock so this is a no-op; backtests: blocks in-play odds
+    #  that already encode the scoreline — the #1 validation leak from the audit)
     rows = conn.execute(f"""
         SELECT book, fair_prob, divergence_pts, MAX(ts) ts FROM market_snapshots
         WHERE match_id = ? AND market = ? AND {outcome_clause} {point_clause}
-          AND ts >= ?
+          AND ts >= ? AND ts <= ?
         GROUP BY book""", params).fetchall()
 
     weights = dict(BOOK_WEIGHTS)

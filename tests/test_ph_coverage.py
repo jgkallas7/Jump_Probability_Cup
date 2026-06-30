@@ -4,7 +4,7 @@ tie -> h2h draw, ahead-at-halftime -> h2h_3_way_h1, any-player-brace -> team lam
 """
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import db as dbmod
 import derive
@@ -12,7 +12,9 @@ from ingest_questions import classify
 
 
 def _snap(conn, market, outcome, point, fair, match_id="M1"):
-    ts = datetime.now(timezone.utc).isoformat()
+    # stamp a minute in the past — real snapshots precede pricing `now`, and the
+    # consensus ts<=now guard correctly excludes any snapshot at/after now.
+    ts = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
     conn.executemany(
         """INSERT INTO market_snapshots
            (ts, source, book, match_id, event_label, market, outcome, point,

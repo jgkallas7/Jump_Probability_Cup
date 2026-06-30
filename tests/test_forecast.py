@@ -59,6 +59,26 @@ def test_win_in_regulation_maps_to_h2h():
                         "Mexico", "South Africa") == ("h2h", "Mexico", None)
 
 
+def test_player_props_handle_ko_wording_accents_country():
+    # KO wording broke EVERY player prop: the SOT regex anchored '?' right after
+    # "on target" (the "in regulation..." suffix sits between), and book names are
+    # ASCII/country-free ("Kylian Mbappe") vs the question's "Kylian Mbappé (France)".
+    assert map_question(
+        "Will Kylian Mbappé (France) have 2 or more shots on target "
+        "in regulation (90 minutes + stoppage time)?",
+        "player_shots_on_target", "France", "Sweden") \
+        == ("player_shots_on_target", "tokens:Over:Kylian|Mbappe", 1.5)
+    assert map_question(
+        "Will Raúl Jiménez (Mexico) score a goal (excluding own goals) in regulation?",
+        "player_goal_scorer_anytime", "Mexico", "Ecuador") \
+        == ("player_goal_scorer_anytime", "tokens:Yes:Raul|Jimenez", None)
+    # a TEAM SOT total must NOT be matched as a player (no player book line) — it
+    # falls through (-> placeholder/derive), not a bogus 'France' player lookup.
+    assert map_question(
+        "Will France have 7 or more shots on target in regulation?",
+        "player_shots_on_target", "France", "Sweden") is None
+
+
 def test_team_total_without_the_word_total():
     from ingest_questions import classify
     # "score 2 or more goals" (no 'total') is a team total, with the KO suffix

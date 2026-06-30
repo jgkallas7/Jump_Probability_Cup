@@ -49,6 +49,15 @@ FAMILIES = [
     # rule lumped '1 or more shots' into the 2+ rate (0.15); 1+ realized 0.231 (n=39).
     (r"at least 1 shot on target|1 or more shots? on target", 0.25,
      "player 1+ SOT no-line — realized 0.231 over n=39 settled (anchor edge)"),
+    # TEAM SOT totals ("Will <team> have N+ SOT", N>=4) — a TEAM racks up several
+    # SOT, so the player-2+ rate (0.15) below is wildly wrong-side. forecast returns
+    # None for a team subject on the player market, so they land here. Line-aware base
+    # from Poisson(team SOT ~5) survival: P(>=6)~0.45, P(>=7)~0.30, P(>=8)~0.20. Flat
+    # (NOT counted team rate — qmodel's team-SOT regressed OOS; environment-level wins).
+    (r"have (?:at least )?[456](?: or more)? shots? on target", 0.45,
+     "team SOT total 4-6 — base (Poisson team-SOT survival)"),
+    (r"have (?:at least )?(?:[789]|\d\d)(?: or more)? shots? on target", 0.30,
+     "team SOT total 7+ — base (Poisson team-SOT survival)"),
     (r"have \d+ or more shots on target", 0.15,
      "player 2+ SOT no-line — must be < the 0.23 single-SOT rate (monotonic)"),
     (r"shots on target", 0.50, "SOT comparison/count family base"),
@@ -65,6 +74,17 @@ FAMILIES = [
     (r"tied at halftime|match be tied", 0.33, "HT draw base"),
     (r"be winning", 0.35, "HT leader family base"),
     (r"more goals than the first half", 0.46, "2H>1H strict, tie drag"),
+    # --- bookless props the flat 0.35 catch-all priced badly wrong-side (2026-06-30) ---
+    (r"own goal be scored", 0.07, "own goal — rare, ~6-8% of matches (was 0.35)"),
+    (r"both teams .*(receive|record|be shown|get|have) (?:at least |1 or more )?(?:one |1 |a )?card",
+     0.82, "both teams >=1 card — near-certain (was 0.35)"),
+    (r"red card be shown", 0.18, "red card in match — ~0.15-0.20 (was 0.35)"),
+    (r"\d+ or more total shots(?: \(on and off target\))?", 0.58,
+     "total shots (all) — matches avg ~25, 20-22+ likely (was 0.35)"),
+    (r"goal be scored in (?:first|second)[\s-]half stoppage", 0.13,
+     "stoppage-time goal — short window (was 0.35)"),
+    (r"goal.*after the second hydration break", 0.45,
+     "goal in last ~15'+ — goals back-loaded (was 0.35)"),
     (r"", 0.35, "unclassified fallback — realized 0.34 over n=32 settled (non-SOT residual)"),
 ]
 

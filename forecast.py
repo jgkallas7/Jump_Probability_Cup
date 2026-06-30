@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import unicodedata
 from datetime import datetime, timedelta, timezone
 
 import db
@@ -160,6 +161,18 @@ def resolve_team(name: str, home: str, away: str) -> str | None:
     return None
 
 
+def _player_tokens(name: str) -> list[str]:
+    """Normalize a contest player name to match book outcome strings.
+
+    KO questions carry accents + a '(Country)' qualifier ('Kylian Mbappé (France)')
+    while books store ASCII, country-free names ('Kylian Mbappe'). Strip the
+    parenthetical, NFKD-fold accents to ASCII, and tokenize -- consensus then
+    matches every token (order-independent: 'Son Heung-min' vs 'Heung-Min Son')."""
+    name = re.sub(r"\s*\([^)]*\)", "", name)                  # drop '(France)' etc.
+    name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    return [x for x in re.split(r"[\s\-]+", name.strip()) if len(x) > 2]
+
+
 def map_question(text: str, mapping: str, home: str, away: str):
     """-> (market, outcome, point) or None if unmappable."""
     t = text.strip()
@@ -268,20 +281,31 @@ def map_question(text: str, mapping: str, home: str, away: str):
         return None
 
     if mapping == "player_shots_on_target":
+        # NOTE: no trailing \? — the "in regulation (90 min + stoppage)" KO suffix
+        # sits between "on target" and "?", which silently broke every KO player-SOT
+        # question (-> flat 0.15 placeholder). Match name via accent/country-robust
+        # tokens, same as the scorer market.
         m = re.match(r"Will (.+?) have (?:at least )?(\d+)(?: or more)? "
-                     r"shots? on target\?", t)
+                     r"shots? on target", t)
         if m:
-            player, n = m.group(1).strip(), int(m.group(2))
-            return ("player_shots_on_target", f"{player} Over", n - 0.5)
+            subject, n = m.group(1).strip(), int(m.group(2))
+            # team SOT totals ("Will France have 7+ SOT") are mis-classified into this
+            # market but have no player book line; hand them to derive's team-SOT pricer.
+            if resolve_team(subject, home, away):
+                return None
+            toks = _player_tokens(subject)
+            if toks:
+                return ("player_shots_on_target",
+                        "tokens:Over:" + "|".join(toks), n - 0.5)
         return None
 
     if mapping == "player_goal_scorer_anytime":
         m = re.match(r"Will (.+?) score a goal", t)
         if m:
-            tokens = [x for x in re.split(r"[\s\-]+", m.group(1).strip())
-                      if len(x) > 2]
-            return ("player_goal_scorer_anytime",
-                    "tokens:" + "|".join(tokens), None)
+            toks = _player_tokens(m.group(1))   # strips accents + '(Country)'
+            if toks:
+                return ("player_goal_scorer_anytime",
+                        "tokens:Yes:" + "|".join(toks), None)
         return None
 
     return None
@@ -296,10 +320,12 @@ def consensus(conn, match_id: str, market: str, outcome: str,
     params: list = [match_id, market]
     if outcome.startswith("tokens:"):
         # player names vary in order across books ('Heung-Min Son' vs
-        # 'Son Heung-min') — require every token, and the Yes side only.
-        tokens = outcome[len("tokens:"):].split("|")
+        # 'Son Heung-min') — require every token, on the named side only. Encoded
+        # "tokens:<side>:<t1>|<t2>|...", side = 'Yes' (scorer) or 'Over' (SOT).
+        side, toks = outcome[len("tokens:"):].split(":", 1)
+        tokens = toks.split("|")
         outcome_clause = " AND ".join(["outcome LIKE ?"] * len(tokens)) \
-            + " AND outcome LIKE '% Yes'"
+            + f" AND outcome LIKE '% {side}'"
         params += [f"%{t}%" for t in tokens]
     else:
         outcome_clause = "outcome = ?"

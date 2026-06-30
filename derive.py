@@ -250,13 +250,24 @@ BASE = {
     "goal_share_first30": 0.21,  # share of match goals before the ~30' hydration break
     "sot_brace_share": 0.50,   # P(a team's multi-SOT haul concentrates 2+ in one player)
     # --- knockout-wording placeholder-gap handlers (WC_PH_COVERAGE) ---
-    # shares set so the handlers land AT the field (offside ~0.52, card ~0.61), not
-    # above it: no basis to price over a roughly-calibrated crowd, and the thin R32
-    # settles (early offside NO x2, card-after-break NO) lean field-high if anything.
-    "offside_share_first30": 0.28,  # offsides ~uniform in time -> ~28% before the 30' break
-    "card_share_after75": 0.15,  # share of cards in the back-loaded last ~15'+stoppage window
+    # Constants are honest POSTERIORS integrating published timing data + knockout
+    # context, NOT fits to the post-hoc email field (there is no field/market visible
+    # at submit time for these bookless props, so a "match the field" target is not
+    # available — only an honest model number is):
+    #  - goal timing: 1st half 43.8% / 2nd 56.2%; 76-90' holds 21.7% of goals (Sapub
+    #    2014). Cards are MORE back-loaded than goals and peak in the final interval
+    #    (PMC10923682; 2nd bookings avg min 74.4), so the generic 75'+stoppage card
+    #    share is ~0.25 (price ~0.73). Discounted to 0.20 (price ~0.67) for knockout
+    #    caution + the lone R32 settle landing NO -> a MILD data-side lean over the
+    #    crowd, not the full generic bet (which ignored KO context).
+    #  - subs scored 13.2% of goals at recent World Cups/Euros (PMC11167463); ~13% PL.
+    #  - offside timing is NOT published at interval granularity (needs raw Opta F24
+    #    feeds). ~Uniform prior (1/3 before 30') discounted to 0.30 (offsides tick up
+    #    with late attacking). Total offside lambda IS counted; only the split is prior.
+    "offside_share_first30": 0.30,  # ~uniform prior, mild late-attacking discount
+    "card_share_after75": 0.20,  # generic 0.25 discounted for KO caution + R32 NO settle
     "ko_extra_time_prob": 0.25,  # fallback P(regulation level -> extra time) when no h2h draw quote
-    "sub_goal_share": 0.14,    # share of match goals scored by substitutes (subs supply ~1/7)
+    "sub_goal_share": 0.13,    # subs scored 13.2% of goals at recent WC/Euros (PMC11167463)
 }
 
 
@@ -749,9 +760,9 @@ def h_half_total_goals(m, g, conn, now):
 def h_either_offside_before_hydration(m, g, conn, now):
     """'Will either team be ruled offside before the first hydration break?' — the
     ~30' cooling break, so P(>=1 MATCH offside in the first ~30 min). Offsides are
-    ~uniform in time (unlike back-loaded goals), so roughly a third land before 30'.
-    Total match offsides = both teams' base rate. The flat placeholder ignored that
-    a match almost always has an early offside (field ~0.52)."""
+    ~uniform in time (offside timing is not published at interval granularity, so a
+    uniform 1/3-before-30' prior; total offside lambda IS counted). Beats the flat
+    placeholder, which ignored that a match almost always has an early offside (field ~0.52)."""
     lam30 = 2 * BASE["offside_base"] * BASE["offside_share_first30"]
     return 1 - math.exp(-lam30), "derived", \
         f"either-offside-by-1st-break lam30={lam30:.2f}"
@@ -763,7 +774,9 @@ def h_card_after_2nd_break(m, g, conn, now):
     break is ~75', so the window is the card-dense last ~15'+stoppage PLUS extra time
     when the match is level after 90. Cards are back-loaded; ET only materialises with
     P(regulation draw) but then adds 30 high-card minutes. Anchors total cards to the
-    cards market when quoted; the flat placeholder badly under-priced it (field ~0.61)."""
+    cards market when quoted. The 0.20 share (generic 0.25 timing rate discounted for
+    knockout caution + the lone R32 NO settle) prices ~0.67 -- a MILD lean over the
+    crowd's ~0.61, justified by the back-loading data, not the full generic bet. WATCH."""
     lam_cards, _ = cards_lambda(conn, m, now)
     p_et = mprob(conn, m["match_id"], "h2h", "Draw", None, now)
     if p_et is None:

@@ -268,6 +268,13 @@ BASE = {
     "card_share_after75": 0.20,  # generic 0.25 discounted for KO caution + R32 NO settle
     "ko_extra_time_prob": 0.25,  # fallback P(regulation level -> extra time) when no h2h draw quote
     "sub_goal_share": 0.13,    # subs scored 13.2% of goals at recent WC/Euros (PMC11167463)
+    # --- no-book prop fallbacks (market-anchored where possible; flat where the rate
+    #     is environment-level — team history regressed 3x OOS, see CLAUDE.md dead-ends)
+    "own_goal_rate": 0.07,        # own goal in a match — rare, ~6-8% (environment-level)
+    "red_card_match_rate": 0.16,  # >=1 red card in a match (~WC base; environment-level)
+    "total_shots_rate": 0.58,     # P(>=20-22 total shots) — matches avg ~25 (flat base)
+    "stoppage_goal_rate": 0.13,   # goal in one half's stoppage window — short, low
+    "goal_share_after75": 0.23,   # share of match goals after the ~75' break (back-loaded)
 }
 
 
@@ -827,6 +834,66 @@ def h_score_both_halves(m, g, conn, now):
     return p1 * p2, "derived", f"both-halves lam={lam_t:.2f}"
 
 
+def h_team_sot_total(m, g, conn, now):
+    """'Will <team> have N or more shots on target?' — MARKET-anchored, not team
+    history (counted team-SOT regressed OOS). Team SOT lambda = match SOT rate scaled
+    to the goal environment (lt/goals) x the team's market goal-share, then Poisson
+    survival. A strong attacking favourite prices far above the flat 0.15 the mis-map
+    produced; an underdog far below. Returns None for a non-team subject (player)."""
+    team = resolve_team(g.group(1), m["home"], m["away"])
+    if not team:
+        return None
+    n = int(g.group(2))
+    lh, la, lt = match_lambdas(conn, m, now)
+    sot_tot = BASE["sot_lambda"] * (lt / BASE["goals_lambda"])
+    share = (lh if team == m["home"] else la) / lt if lt > 0 else 0.5
+    lam = sot_tot * share
+    return p_geq(lam, n), "derived", f"team-SOT lam={lam:.2f} P(>={n})"
+
+
+def h_own_goal(m, g, conn, now):
+    """'Will an own goal be scored?' — environment-level base rate (~7%); team form
+    doesn't move it. The flat 0.35 catch-all was 5x too high."""
+    return BASE["own_goal_rate"], "base", "own-goal base"
+
+
+def h_both_teams_card(m, g, conn, now):
+    """'Will both teams receive at least one card?' — MARKET-anchored on the cards
+    line: split total cards evenly, P(a team >=1 card) = 1-exp(-lam/2), both = square.
+    Near-certain in most matches; the flat 0.35 was badly low."""
+    lam_cards, _ = cards_lambda(conn, m, now)
+    pe = 1 - math.exp(-lam_cards / 2.0)
+    return pe * pe, "derived", f"both-teams-card lam/2={lam_cards / 2:.2f}"
+
+
+def h_red_card_match(m, g, conn, now):
+    """'Will a red card be shown in the match?' — environment-level base (~16%); the
+    flat 0.35 was ~2x too high. (Distinct from the pen-or-red union handler.)"""
+    return BASE["red_card_match_rate"], "base", "red-card base"
+
+
+def h_total_shots_match(m, g, conn, now):
+    """'Will there be N or more total shots (on and off target)?' — no total-shots
+    book line; matches average ~25 total shots so 20-22+ is likely. Flat base (the
+    line N barely moves vs the mean), well above the 0.35 catch-all."""
+    return BASE["total_shots_rate"], "base", "total-shots base"
+
+
+def h_stoppage_goal(m, g, conn, now):
+    """'Will a goal be scored in (first/second)-half stoppage time?' — a short added-
+    time window, so low; the flat 0.35 over-priced it ~2-3x."""
+    return BASE["stoppage_goal_rate"], "base", "stoppage-goal base"
+
+
+def h_goal_after_2nd_break(m, g, conn, now):
+    """'Will a goal be scored after the second hydration break?' — the ~75' break, so
+    P(>=1 goal in the last ~15'+stoppage). Goals are back-loaded (~23% land after 75'),
+    so MARKET-anchored on the match lambda; mirrors h_goal_before_hydration."""
+    _, _, lt = match_lambdas(conn, m, now)
+    lam = lt * BASE["goal_share_after75"]
+    return 1 - math.exp(-lam), "derived", f"goal-after-2nd-break lam={lam:.2f}"
+
+
 # Tried as a FALLBACK only (after qmodel + HANDLERS), and only when PH_COVERAGE_ON.
 COVERAGE_HANDLERS = [
     (r"(?:regulation|the match|match).*end in a tie|end in a tie", h_ends_in_tie),
@@ -841,6 +908,15 @@ COVERAGE_HANDLERS = [
      h_either_offside_before_hydration),
     (r"card.*after the second hydration break", h_card_after_2nd_break),
     (r"card be shown in the first half", h_card_in_first_half),
+    (r"[Ww]ill (.+?) have (?:at least )?(\d+)(?: or more)? shots on target",
+     h_team_sot_total),
+    (r"own goal be scored", h_own_goal),
+    (r"both teams .*(?:receive|record|be shown|get|have) (?:at least |1 or more )?"
+     r"(?:one |1 |a )?card", h_both_teams_card),
+    (r"red card be shown", h_red_card_match),
+    (r"\d+ or more total shots", h_total_shots_match),
+    (r"goal be scored in (?:first|second)[\s-]half stoppage", h_stoppage_goal),
+    (r"goal.*after the second hydration break", h_goal_after_2nd_break),
     (r"[Ww]ill a substitute score a goal", h_substitute_scores),
     (r"[Ww]ill (.+?) score in both halves", h_score_both_halves),
     (r"(first|second) half have (\d+) or (more|fewer|less) total goals",
@@ -887,12 +963,18 @@ def run(conn, hours: float = 30, submit_mode: bool = False, dry: bool = False):
     now = datetime.now(timezone.utc)
     horizon = (now + timedelta(hours=hours)).isoformat()
     # NO_MARKET only: book-mapped questions belong to forecast/consensus —
-    # derive must NEVER PATCH its cruder Poisson over a sharp consensus
-    # value (review finding: ping-pong with derive winning at close).
+    # derive must NEVER PATCH its cruder Poisson over a sharp consensus value
+    # (review finding: ping-pong with derive winning at close). EXCEPTION:
+    # player_shots_on_target also carries the mis-classified TEAM SOT totals
+    # ('Will France have 7+ SOT'), which have NO player book line; we include
+    # them so h_team_sot_total can price/PATCH them. Safe — every SOT handler
+    # gates on resolve_team, so a real player question returns None (no PATCH).
     qs = conn.execute("""
         SELECT q.qid, q.text, q.match_id, m.home, m.away
         FROM questions q JOIN matches m USING(match_id)
-        WHERE q.status='open' AND q.market_mapping = 'NO_MARKET'
+        WHERE q.status='open'
+          AND (q.market_mapping = 'NO_MARKET'
+               OR q.market_mapping = 'player_shots_on_target')
           AND m.kickoff_utc > ? AND m.kickoff_utc <= ?
         ORDER BY m.kickoff_utc""",
         ((now - timedelta(hours=2)).isoformat(), horizon)).fetchall()

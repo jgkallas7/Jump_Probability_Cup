@@ -38,6 +38,12 @@ QTYPE_RULES: list[tuple[str, str, str]] = [
     (r"(corner|card|booking|foul|penalt|free kick|offside)", "prop", "NO_MARKET"),
     (r"shots? on target.*(first|second) half|"
      r"(halftime|first half|second half).*shots? on target", "prop", "NO_MARKET"),
+    # TEAM SOT totals ("will <team> have 4+/6+/7+ shots on target") have NO player
+    # book line; a single player never gets a 4+ contest question. Route to derive
+    # (NO_MARKET) -> h_team_sot_total prices it market-anchored. MUST precede the
+    # player rule, which otherwise swallows them onto a flat 0.15 placeholder.
+    (r"will .+ have (?:at least )?(?:[4-9]|\d\d+)(?: or more)? shots? on target",
+     "team_sot", "NO_MARKET"),
     (r"will .+ have (at least \d+|\d+ or more) shots? on target", "player_sot",
      "player_shots_on_target"),
     (r"shots? on target", "prop", "NO_MARKET"),

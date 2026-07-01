@@ -373,3 +373,30 @@ sources flags.sh (was mislabeling LIVE flags as "candidate"). Honesty labels
 added to the WC_FOULS_DOM and split-anchor gates (same-sample parameter
 selection; re-priced-not-as-sent baselines). Meta-lesson: the recurring failure
 mode is ARCHIVAL — write findings to durable artifacts the same turn.
+
+## 2026-07-01 — auto review (review_report.py)
+Realized edge vs consensus clone: -335. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-01.md`.
+
+## 2026-07-01 (night) — GO-LIVE: all validated flags flipped + remaining defects fixed
+User directive ("fix all defects, optimize it to win") + governance policy
+resolved: flips are the agent's job once the gate clears (CLAUDE.md + flags.sh
+headers updated; the disabled improve-loop still never edits flags).
+FLIPPED LIVE in flags.sh, each with gate evidence inline:
+  - WC_SOT_TOTAL_ANCHOR=0.78 + WC_SOT_TEAM_ANCHOR=0.42 (gate +125/n=47; the
+    pooled 0.65 was REJECT −79 on its real scope — post-flip the live config
+    re-gates APPROVE +87/n=60)
+  - WC_FOULS_DOM=0.15 (+123/n=55, same-sample caveat labeled; 0.10–0.25 plateau)
+  - WC_KALSHI_NO_SOA=1 (structural: wide-spread mids aren't probabilities)
+  - WC_CORNER_SUP_SLOPE=0.5 (fallback-only scope, thin-n HOLD, forward-watch)
+  - WC_BTS_HALF_ANCHOR deliberately NOT set (0.68 is the sweep optimum).
+DEFECTS FIXED: PATCH-400 retry loop (locked_predictions table — a 400 marks the
+prediction final; submit+derive skip it; Jun-27 burned 213 futile PATCHes);
+dual team-SOT pricers consolidated onto one shared body (wordings "N or more"
+vs "at least N" priced 0.232 vs 0.028 for the same question — raw-share variant
+was +15/n=29 anchored but same-sample-thin, so consolidation is on the
+incumbent formula for consistency, not a formula switch).
+VERIFIED: 113 tests pass; DB-copy dry-run shows all effects (team-SOT down ~11,
+total-shots line-aware 20+→78/22+→68 with a PATCH queued over the old flat 58,
+SOA off kalshi); review regenerated with LIVE labels. The 15-min sentinel
+applies everything to the open slate (USA–Bosnia next); morning.sh covers the
+full slate. WATCH nightly: family table + every gate; pull back any slider.

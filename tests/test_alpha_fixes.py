@@ -261,3 +261,28 @@ def test_placeholder_both_teams_cards_plural():
     assert p == 0.82, why
     p, why = placeholder_for("Will both teams receive at least one card?")
     assert p == 0.82, why
+
+
+# ---- PATCH-400 lock bookkeeping (stop retrying server-locked predictions) ----
+
+def test_locked_prediction_roundtrip():
+    conn = dbmod.init(":memory:")
+    assert dbmod.locked_prediction_ids(conn) == set()
+    dbmod.mark_prediction_locked(conn, "pid-1", "Q1", "400 Client Error: locked")
+    dbmod.mark_prediction_locked(conn, "pid-1", "Q1", "repeat is idempotent")
+    assert dbmod.locked_prediction_ids(conn) == {"pid-1"}
+
+
+# ---- team-SOT: both wordings now hit ONE shared pricer ----
+
+def test_team_sot_wordings_price_identically():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    g1 = re.search(r"Will (.+?) have (\d+) or more shots on target"
+                   r"( in the second half| in the first half)?",
+                   "Will Belgium have 7 or more shots on target?")
+    g2 = re.search(r"[Ww]ill (.+?) have (?:at least )?(\d+)(?: or more)? shots on target",
+                   "Will Belgium have at least 7 shots on target?")
+    p1 = derive.h_team_sot(M, g1, conn, now)[0]
+    p2 = derive.h_team_sot_total(M, g2, conn, now)[0]
+    assert abs(p1 - p2) < 1e-12   # was 0.232 vs 0.028 by wording

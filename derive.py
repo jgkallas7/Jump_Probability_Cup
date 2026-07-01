@@ -471,11 +471,13 @@ def h_total_sot(m, g, conn, now):
     return p, "anchored", f"sot lam={lam:.2f} damped0.6"
 
 
-def h_team_sot(m, g, conn, now):
-    team = resolve_team(g.group(1), m["home"], m["away"])
-    if not team:
-        return None  # player SOT questions are book-mapped, not derived
-    k, half = int(g.group(2)), bool(g.group(3))
+def _team_sot_price(m, team, k, half, conn, now):
+    """Single team-SOT threshold pricer, shared by BOTH wordings ('N or more'
+    and 'at least N'). Before 2026-07-01 the two wordings hit two DIVERGENT
+    formulas (this damped one vs a raw-goal-share one in the coverage handler
+    — underdog 7+ priced 0.232 vs 0.028 by phrasing). Consolidated on the
+    incumbent: the raw-share variant scored +15/n=29 better anchored, but
+    that's same-sample noise, and consistency is the actual defect."""
     _, _, lt = match_lambdas(conn, m, now)
     lam = BASE["sot_lambda"] * (lt / BASE["goals_lambda"]) \
         * sot_share(conn, m, team, now)
@@ -483,6 +485,13 @@ def h_team_sot(m, g, conn, now):
         lam *= BASE["h2_sot_share"]
     p = 0.5 + 0.6 * (p_geq(lam, k) - 0.5)  # damped: weakest family (review)
     return p, "anchored", f"team sot lam={lam:.2f} damped0.6"
+
+
+def h_team_sot(m, g, conn, now):
+    team = resolve_team(g.group(1), m["home"], m["away"])
+    if not team:
+        return None  # player SOT questions are book-mapped, not derived
+    return _team_sot_price(m, team, int(g.group(2)), bool(g.group(3)), conn, now)
 
 
 def h_pen_or_red(m, g, conn, now):
@@ -880,20 +889,16 @@ def h_score_both_halves(m, g, conn, now):
 
 
 def h_team_sot_total(m, g, conn, now):
-    """'Will <team> have N or more shots on target?' — MARKET-anchored, not team
-    history (counted team-SOT regressed OOS). Team SOT lambda = match SOT rate scaled
-    to the goal environment (lt/goals) x the team's market goal-share, then Poisson
-    survival. A strong attacking favourite prices far above the flat 0.15 the mis-map
-    produced; an underdog far below. Returns None for a non-team subject (player)."""
+    """'Will <team> have at least N shots on target?' — the coverage-wording
+    twin of h_team_sot. Delegates to the SAME shared pricer (_team_sot_price)
+    so the two phrasings can't diverge again (pre-2026-07-01 this used a raw
+    goal-share formula that priced an underdog 7+ at 0.028 vs the damped 0.232
+    — equivalent questions, different prices by wording). Returns None for a
+    non-team subject (player questions are book-mapped, not derived)."""
     team = resolve_team(g.group(1), m["home"], m["away"])
     if not team:
         return None
-    n = int(g.group(2))
-    lh, la, lt = match_lambdas(conn, m, now)
-    sot_tot = BASE["sot_lambda"] * (lt / BASE["goals_lambda"])
-    share = (lh if team == m["home"] else la) / lt if lt > 0 else 0.5
-    lam = sot_tot * share
-    return p_geq(lam, n), "derived", f"team-SOT lam={lam:.2f} P(>={n})"
+    return _team_sot_price(m, team, int(g.group(2)), False, conn, now)
 
 
 def h_corners_before_hydration(m, g, conn, now):
@@ -1133,11 +1138,19 @@ def run(conn, hours: float = 30, submit_mode: bool = False, dry: bool = False):
             else:
                 print(f"  FAIL  {t[:70]}")
         conn.commit()
+    locked = db.locked_prediction_ids(conn)
     for qid, pid, old, n_, t, prob, reason in patches:
+        if pid in locked:
+            continue
         try:
             c.revise(pid, n_)
         except Exception as e:
             print(f"  PATCH FAIL {t[:60]}: {e}")
+            # 400 = market locked server-side — remember, stop retrying (the
+            # sentinel re-derives every 15 min; Jun-27 saw 213 futile PATCHes)
+            resp = getattr(e, "response", None)
+            if resp is not None and getattr(resp, "status_code", None) == 400:
+                db.mark_prediction_locked(conn, pid, qid, str(e))
             continue
         conn.execute(
             """INSERT INTO forecasts(qid, ts, blend_w, final_prob, deviation_bps,

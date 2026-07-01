@@ -9,6 +9,7 @@ Deviations from the SPEC sketch, both deliberate:
 from __future__ import annotations
 
 import sqlite3
+from datetime import datetime, timezone
 
 from config import DB_PATH
 
@@ -95,6 +96,18 @@ CREATE TABLE IF NOT EXISTS credit_log(
     used      INTEGER,                  -- x-requests-used (month to date)
     remaining INTEGER                   -- x-requests-remaining
 );
+
+-- predictions the API refused to PATCH with a 400 (market locked server-side,
+-- which can happen BEFORE kickoff). Without this the sentinel re-tried the
+-- same locked prediction every 15 min until settle (Jun-27 Colombia-DR Congo:
+-- 213 futile PATCHes; the intended revisions were lost either way). A row here
+-- means: stop trying, the value on the books is what will be scored.
+CREATE TABLE IF NOT EXISTS locked_predictions(
+    sp_prediction_id TEXT PRIMARY KEY,
+    qid              TEXT,
+    ts               TEXT,
+    detail           TEXT
+);
 """
 
 
@@ -111,6 +124,23 @@ def init(db_path=None) -> sqlite3.Connection:
     conn.executescript(SCHEMA)
     conn.commit()
     return conn
+
+
+def locked_prediction_ids(conn) -> set[str]:
+    """sp_prediction_ids the API has 400'd (market locked) — skip PATCHing."""
+    try:
+        return {r[0] for r in conn.execute(
+            "SELECT sp_prediction_id FROM locked_predictions")}
+    except sqlite3.OperationalError:      # pre-migration DB (table from init())
+        return set()
+
+
+def mark_prediction_locked(conn, pid: str, qid: str, detail: str) -> None:
+    conn.execute("CREATE TABLE IF NOT EXISTS locked_predictions("
+                 "sp_prediction_id TEXT PRIMARY KEY, qid TEXT, ts TEXT, detail TEXT)")
+    conn.execute("INSERT OR IGNORE INTO locked_predictions VALUES (?,?,?,?)",
+                 (pid, qid, datetime.now(timezone.utc).isoformat(), detail[:200]))
+    conn.commit()
 
 
 if __name__ == "__main__":

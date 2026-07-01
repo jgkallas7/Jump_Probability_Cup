@@ -152,10 +152,12 @@ rescue book-unpriced questions.
 - **Feature-flag discipline.** Every behavior change ships behind a `WC_*` env
   flag, **default OFF**, and must beat what-we-currently-send on a clean
   **out-of-sample** check (`evaluate_qmodel.py --prior-only`, or `parse_locked`
-  on settled questions) *before* being enabled in `morning.sh`. In-sample wins
-  are mirages and have burned this project repeatedly. Live flags today:
-  `WC_QMODEL=1`, `WC_KALSHI=1` (see `morning.sh` for the others, kept OFF with
-  reasons inline). A human flips a flag live — code never auto-edits `morning.sh`.
+  on settled questions) *before* being enabled. In-sample wins are mirages and
+  have burned this project repeatedly. Flags live in `routines/flags.sh`
+  (single source, gate evidence inline per flag). Flips happen in an
+  interactive session at the user's direction once the `review_report` gate
+  clears (user policy, re-affirmed 2026-07-01: "flipping is the agent's job");
+  the DISABLED autonomous improve-loop must never edit flags.
 - **Submissions are integers 1–99**; keep floats internally, round only at
   submit. **Read-back asymmetry:** you POST `75`, the API returns `0.75`
   (`_norm_prob` handles it).

@@ -14,10 +14,15 @@ contest question, scored **relative to the field** (NOT absolute Brier).
 > corrections) and `data/improvement_log.md` (2026-07-01 entries) as current
 > truth. Fixes built + committed (214b62e), gates in the nightly review:
 > WC_FOULS_DOM=0.15 (+123/n=55), WC_SOT_TOTAL_ANCHOR=0.78 + WC_SOT_TEAM_ANCHOR
-> =0.42 (+125/n=47), WC_KALSHI_NO_SOA=1 (+28/n=5 thin, structural), all
-> **pending the human flip in routines/flags.sh**. Do NOT set
-> WC_BTS_HALF_ANCHOR (0.68 already optimal). Everything is committed now —
-> the "31 files UNCOMMITTED" note in §1 is obsolete.
+> =0.42 (+125/n=47), WC_KALSHI_NO_SOA=1 (+28/n=5 thin, structural),
+> WC_CORNER_SUP_SLOPE=0.5 — **ALL FLIPPED LIVE 2026-07-01 evening** at the
+> user's direction (governance policy updated in CLAUDE.md + flags.sh: the
+> agent flips once the gate clears; the disabled improve-loop never does).
+> Post-flip the SOT-anchor gate reads APPROVE +87 on the flag's full scope
+> (was REJECT −79 pooled). WC_BTS_HALF_ANCHOR deliberately NOT set (0.68 is
+> the optimum). WATCH the family table + gates nightly; pull back any flag
+> whose gate slides. Everything is committed — the "31 files UNCOMMITTED"
+> note in §1 is obsolete.
 
 ---
 
@@ -109,18 +114,15 @@ contest question, scored **relative to the field** (NOT absolute Brier).
   option in this WSL). Cost is NOT a factor (Max subscription covers claude -p).
 
 ## 6. OPEN TASKS / NEXT STEPS
-- **#11 (2026-07-01) — flag flips pending the human** (see the refresh note at
-  top): WC_FOULS_DOM=0.15, WC_SOT_TOTAL_ANCHOR=0.78, WC_SOT_TEAM_ANCHOR=0.42,
-  WC_KALSHI_NO_SOA=1 in routines/flags.sh. Optional: WC_CORNER_SUP_SLOPE=0.5
-  (gate thin, accumulating). Then WATCH the family table + gates nightly.
-- **#12 — final/3rd-place stage population** (no advancement question names the
-  round for the final → needs a KO-calendar fallback so the 3× multiplier isn't
-  stripped; see MEMORY.md header note).
-- **#13 — sentinel PATCH-400 loop**: markets can lock server-side BEFORE
-  kickoff; sentinel retries a locked prediction every 15 min until settle
-  (Colombia–DR Congo Jun-27: revisions 56→63 / 30→26 were LOST). Consider
-  marking a 400'd prediction final locally + reading the market's real close
-  time. Log now timestamped (sentinel.sh) so future loops are datable.
+- ~~#11 flag flips~~ DONE 2026-07-01 evening (all live, see refresh note).
+- ~~#12 final/3rd-place stage~~ DONE: `_KO_CALENDAR` date fallback in
+  `ingest_questions.backfill_stages` covers every KO round incl. third/final;
+  13 mistagged matches + 101 settled outcome multipliers repaired.
+- ~~#13 sentinel PATCH-400 loop~~ DONE: `locked_predictions` table — a 400
+  (market locked server-side, can precede kickoff) marks the prediction final
+  locally; submit.cmd_revise + derive.run skip it thereafter. 5xx/network stay
+  retryable. Open refinement: read the market's REAL close time from the API
+  so the last pre-lock revision isn't lost (Jun-27 lost 56→63 / 30→26).
 - **#9 — matchday-2 team-rate check (LIVE in-tournament rates, ≠ the rejected
   historical priors).** All 24 teams still have 1 WC game. When matchday-2 settles
   + locked emails arrive: harvest emails (Gmail MCP), `team_rates.py refresh`,

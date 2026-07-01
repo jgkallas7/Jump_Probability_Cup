@@ -7,9 +7,12 @@
 # sentinel.sh set no flags, silently re-pricing every near-kickoff revision with
 # the entire feature set OFF and PATCHing the flag-free value over morning's
 # flagged one (found 2026-06-23 on Portugal-Uzbekistan: morning devcap'd the h2h
-# 0.811->0.733, sentinel re-priced 0.857 flag-free and submitted it). A human
-# flips a flag here; code never auto-edits it. Each flag's gate/validation lives
-# in the comment beside it.
+# 0.811->0.733, sentinel re-priced 0.857 flag-free and submitted it).
+# GOVERNANCE (user policy, re-affirmed 2026-07-01): flips are made in an
+# interactive session at the user's direction once the review_report gate
+# clears, with the gate evidence recorded inline beside the flag. The DISABLED
+# autonomous improve-loop (wc-improve) must NEVER edit this file. Each flag's
+# gate/validation lives in the comment beside it.
 
 # Counted-rate quant pricer for alpha (NO_MARKET) questions. Enabled after a
 # CLEAN no-look-ahead OOS (evaluate_qmodel.py --prior-only): clean qmodel beat
@@ -53,7 +56,52 @@ export WC_DEVCAP=1
 # high-N thresholds; 0.5 is the bias-variance center. WATCH: the win is back-
 # loaded/concentrated (n=21, one +30 day) — if the nightly gate slides to
 # HOLD/REJECT as more settle, flip this OFF. Tunable: WC_SOT_ANCHOR/WC_SOT_BETA.
+# ⚠️ 2026-07-01: the gate, widened to the flag's REAL scope (b8c4a7d also
+# anchors team-SOT rows misfiled in player_shots_on_target), says the POOLED
+# 0.65 anchor is REJECT (−79/n=60): total-SOT settles 84% YES, team-SOT 39% —
+# one anchor is wrong for both. The split anchors below are the fix; this
+# master switch stays ON (it gates the whole anchor mechanism).
 export WC_SOT_THRESH_ANCHOR=1
+# Family-split SOT anchors (2026-07-01). Settled base rates: total-SOT 84% YES
+# (n=19; the contest writes those lines low), team-SOT 39% (n=33). Split gate
+# (_sot_split_gain, re-priced prior-only, pre-kickoff λ): pooled +93 vs split
+# +218 = APPROVE +125 over n=47; drop-3-best sensitivity +36 each side. Anchors
+# chosen from the outcome COUNTS (0.78 deliberately below the +points argmax
+# 0.85; 0.42 ≈ the 39% base) — same-sample caveat labeled in the gate, so WATCH
+# the nightly verdict + the sot_total/sot_team family rows; pull back if it
+# slides. ENABLED 2026-07-01 (user-directed session flip).
+export WC_SOT_TOTAL_ANCHOR=0.78
+export WC_SOT_TEAM_ANCHOR=0.42
+# Fouls-race game-state tilt (qmodel._foul_dom): the underdog commits more
+# fouls; the symmetric counted Skellam missed it (fouls_race was the single
+# biggest alpha leak, −128/n=55 — and the old h_fouls_race had the right sign
+# but WC_QMODEL preempted it). Gate (_fouls_dom_gain, prior-only, pre-kickoff
+# λ): re-priced symmetric +54 vs tilted +177 = APPROVE +123/n=55, beats the
+# field-clone at the 0.10–0.25 plateau. HONESTY: 0.15 is the argmax on the same
+# settled sample (interior peak, smooth curve — not a grid edge) and the
+# baseline is re-priced, not as-sent; treat the magnitude as same-sample until
+# post-flip fouls Qs settle. WATCH the fouls_race family row nightly; lower the
+# slope if the gate slides. ENABLED 2026-07-01 (user-directed session flip).
+export WC_FOULS_DOM=0.15
+# Score-or-assist OFF Kalshi (2026-07-01): kalshi_wc.mid() has no spread guard
+# and player-prop books are thin — a wide book pins the mid ~0.5 regardless of
+# truth (kalshi-priced SOA realized −40/n=5, sent ~0.49 on 20%-YES questions).
+# With this ON the family falls through to the book-union h_score_or_assist
+# (whose KO name-matching bug is fixed — derive now uses _player_tokens) or the
+# 0.24 family placeholder. Gate thin (n=5, +28) but the defect is structural:
+# a wide-spread mid is not a probability. ENABLED 2026-07-01.
+export WC_KALSHI_NO_SOA=1
+# Corner-race supremacy-fallback slope (2026-07-01): the fallback (used only
+# when NO corner-spread ladder is quoted) capped its tilt at ±0.10 while
+# ladder-implied shares run ±0.17 — the h_fouls_race right-sign-too-weak defect
+# class. 0.50 doubles-plus the tilt (max ±0.25). Gate thin (n=2, +17, HOLD) —
+# enabled on mechanism + bounded scope (fallback-only), same basis as
+# WC_TO_ADVANCE_H2H/WC_PH_COVERAGE. WATCH corners_race families; revert to 0.20
+# if they regress. ENABLED 2026-07-01.
+export WC_CORNER_SUP_SLOPE=0.5
+# WC_BTS_HALF_ANCHOR deliberately NOT set: the 0.68 default is already the
+# sweep optimum (0.63 −0.8, 0.72 −2.2 — the morning audit's "raise it" was
+# backwards). The knob + gate exist for future evidence.
 # Player-SOT over-pricing anchor: shade book-mapped player ">=1 shot on target"
 # props DOWN toward 0.30 at beta=0.5 (player-subject only; mis-mapped team SOT
 # totals excluded). ENABLED 2026-06-23 after its gate cleared: review_report

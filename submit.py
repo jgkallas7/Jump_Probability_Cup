@@ -149,9 +149,10 @@ def cmd_revise(conn, hours: float, dry: bool) -> None:
 
     n_patched = 0
     ts = _now()
+    locked = db.locked_prediction_ids(conn)
     for r in submitted:
         f = fresh.get(r["qid"])
-        if not f or not r["sp_prediction_id"]:
+        if not f or not r["sp_prediction_id"] or r["sp_prediction_id"] in locked:
             continue
         new_int = f["submit_int"]
         old_int = int(round((r["submitted_prob"] or 0) * 100))
@@ -164,6 +165,11 @@ def cmd_revise(conn, hours: float, dry: bool) -> None:
             c.revise(r["sp_prediction_id"], new_int)
         except requests.HTTPError as e:
             print(f"    PATCH failed: {e}")
+            # 400 = market locked server-side (can precede kickoff). Remember it
+            # so the 15-min sentinel doesn't retry the same dead PATCH until
+            # settle (Jun-27: 213 futile retries). 5xx/network stay retryable.
+            if e.response is not None and e.response.status_code == 400:
+                db.mark_prediction_locked(conn, r["sp_prediction_id"], r["qid"], str(e))
             continue
         conn.execute(
             """UPDATE forecasts SET submitted_at=?, submitted_prob=?,

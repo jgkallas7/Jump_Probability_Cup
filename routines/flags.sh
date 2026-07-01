@@ -14,7 +14,12 @@
 # Counted-rate quant pricer for alpha (NO_MARKET) questions. Enabled after a
 # CLEAN no-look-ahead OOS (evaluate_qmodel.py --prior-only): clean qmodel beat
 # what we send (+3.6) and forward use is look-ahead-free (price time only sees
-# prior games). Team-rate edge grows as the tournament progresses.
+# prior games). ⚠️ HONEST UPDATE 2026-07-01 (post leak-fix c61455c, n=273):
+# qmodel +488 vs sent +398 vs field-clone +707 — it beats what-we'd-otherwise-
+# send (+90) but does NOT beat the field in aggregate. Kept ON as the better
+# fallback; judge it PER-FAMILY via review_report's NO_MARKET family table
+# (pen_or_red/offsides win; fouls_race lost -128 until WC_FOULS_DOM). The old
+# "+110/+28 vs field" claim was a contaminated early sample — do not cite it.
 export WC_QMODEL=1
 # Kalshi WC crowd mids: BLEND into book totals/corners (book stays primary; goal
 # totals validated to 0.6pt vs sharp line, corners +5-7pt so blended not

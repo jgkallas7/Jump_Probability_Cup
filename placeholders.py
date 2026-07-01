@@ -66,6 +66,11 @@ FAMILIES = [
     (r"more fouls than", 0.47, "fouls comparison, tie drag"),
     (r"more corner kicks than", 0.45, "corner comparison w/ half quals, tie drag"),
     (r"more cards than|receive more cards", 0.42, "cards comparison, tie drag"),
+    # both-teams-card must precede the generic `cards` catch-all — a plural
+    # wording ("both teams receive cards") would otherwise take 0.50 not 0.82
+    # (Jul-01 commit audit; latent — derive's h_both_teams_card usually preempts)
+    (r"both teams .*(receive|record|be shown|get|have) (?:at least |1 or more )?(?:one |1 |a )?cards?",
+     0.82, "both teams >=1 card — near-certain (was 0.35)"),
     (r"caught offside", 0.45, "offsides count family base"),
     (r"penalty kick be awarded OR a red card", 0.33, "pen-or-red union base"),
     (r"penalty kick be awarded", 0.28, "pen base"),
@@ -76,8 +81,6 @@ FAMILIES = [
     (r"more goals than the first half", 0.46, "2H>1H strict, tie drag"),
     # --- bookless props the flat 0.35 catch-all priced badly wrong-side (2026-06-30) ---
     (r"own goal be scored", 0.07, "own goal — rare, ~6-8% of matches (was 0.35)"),
-    (r"both teams .*(receive|record|be shown|get|have) (?:at least |1 or more )?(?:one |1 |a )?card",
-     0.82, "both teams >=1 card — near-certain (was 0.35)"),
     (r"red card be shown", 0.18, "red card in match — ~0.15-0.20 (was 0.35)"),
     (r"\d+ or more total shots(?: \(on and off target\))?", 0.58,
      "total shots (all) — matches avg ~25, 20-22+ likely (was 0.35)"),

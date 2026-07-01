@@ -86,21 +86,36 @@ def _shrink_gain(recs, mm_filter, beta):
     return len(sub), sent, shrunk
 
 
-def _sot_anchor_gain(recs, anchor=0.65, beta=0.5):
+def _sot_anchor_gain(conn, recs, anchor=0.65, beta=0.5):
     """WC_SOT_THRESH_ANCHOR gate: realized rel on SOT-threshold questions, as-sent
-    vs blended toward `anchor`. Scope is derive.is_sot_threshold itself — the SAME
-    predicate the live flag uses — so the gate can't drift from what ships (it
-    already excludes the SOT race and the already-anchored 'both teams >=1')."""
+    vs blended toward the live family anchor (derive._sot_anchor_value — mirrors
+    the split knobs when set, else the pooled `anchor`). Scope is
+    derive.is_sot_threshold PLUS the team-SOT rows misfiled in
+    player_shots_on_target: b8c4a7d widened derive.run to price+anchor those, so
+    a NO_MARKET-only gate was scoring a narrower population than the live flag
+    touches (the scope-drift class b7e5952 fixed once already)."""
+    import re as _re
     import derive
-    # NO_MARKET only — the flag lives in derive.py, which prices ONLY alpha
-    # questions; the book-mapped player_shots_on_target bucket shares the
-    # "shots on target" text but is priced by forecast.py and never anchored.
-    sub = [(our, o, fab) for mm, our, fld, o, fab, txt in recs
-           if mm == "NO_MARKET" and derive.is_sot_threshold(txt)]
+    teams = {r[0] for r in conn.execute(
+        "SELECT home FROM matches UNION SELECT away FROM matches")}
+
+    def in_scope(mm, txt):
+        if not derive.is_sot_threshold(txt):
+            return False
+        if mm == "NO_MARKET":
+            return True
+        if mm != "player_shots_on_target":
+            return False
+        g = _re.search(r"[Ww]ill (.+?) have", txt)   # team subject only — derive
+        return bool(g and g.group(1).strip() in teams)  # never prices player rows
+
+    sub = [(our, o, fab, txt) for mm, our, fld, o, fab, txt in recs
+           if in_scope(mm, txt)]
     if not sub:
         return 0, 0.0, 0.0
-    sent = sum(_rel(our, o, fab) for our, o, fab in sub)
-    anch = sum(_rel(_clip((1 - beta) * our + beta * anchor), o, fab) for our, o, fab in sub)
+    sent = sum(_rel(our, o, fab) for our, o, fab, _ in sub)
+    anch = sum(_rel(_clip((1 - beta) * our + beta * derive._sot_anchor_value(txt)),
+                    o, fab) for our, o, fab, txt in sub)
     return len(sub), sent, anch
 
 
@@ -483,10 +498,11 @@ def build(conn) -> str:
              f"{shrunk:+.0f} -> {_verdict(n, shrunk - sent)}")
     # WC_SOT_THRESH_ANCHOR: SOT-threshold base anchor at the shipped anchor/beta
     import derive
-    n, sent, anch = _sot_anchor_gain(recs, derive.SOT_ANCHOR, derive.SOT_BETA)
-    L.append(f"- **WC_SOT_THRESH_ANCHOR** (SOT-threshold -> {derive.SOT_ANCHOR:.2f} "
-             f"beta={derive.SOT_BETA}, excl already-fixed): sent {sent:+.0f} vs "
-             f"anchored {anch:+.0f} -> {_verdict(n, anch - sent)}")
+    n, sent, anch = _sot_anchor_gain(conn, recs, derive.SOT_ANCHOR, derive.SOT_BETA)
+    L.append(f"- **WC_SOT_THRESH_ANCHOR** (SOT-threshold -> live family anchors, "
+             f"pooled {derive.SOT_ANCHOR:.2f} beta={derive.SOT_BETA}, incl misfiled "
+             f"team-SOT): sent {sent:+.0f} vs anchored {anch:+.0f} -> "
+             f"{_verdict(n, anch - sent)}")
     # WC_PLAYER_SOT_ANCHOR: player '>=1 SOT' props shaded down at the shipped anchor/beta
     import forecast
     n, sent, anch = _player_sot_anchor_gain(conn, recs, forecast.PLAYER_SOT_ANCHOR,
@@ -508,9 +524,13 @@ def build(conn) -> str:
     import qmodel
     fcand = qmodel.FOUL_DOM_SLOPE if qmodel.FOUL_DOM_SLOPE else 0.15
     n, s0, tl = _fouls_dom_gain(conn, fcand)
+    # honesty (Jul-01 session audit): both arms are RE-PRICED configs, not what
+    # production sent (sent was far below the reconstructed symmetric); and 0.15
+    # is the argmax of this same settled set — treat the gain as same-sample
+    # until fouls Qs settled AFTER the flip confirm it forward.
     L.append(f"- **WC_FOULS_DOM** (fouls-race underdog tilt slope={fcand:g}"
-             f"{', LIVE' if qmodel.FOUL_DOM_SLOPE else ', candidate'}): symmetric "
-             f"{s0:+.0f} vs tilted {tl:+.0f} -> {_verdict(n, tl - s0)}")
+             f"{', LIVE' if qmodel.FOUL_DOM_SLOPE else ', candidate (slope fit on this sample)'}): "
+             f"re-priced symmetric {s0:+.0f} vs tilted {tl:+.0f} -> {_verdict(n, tl - s0)}")
 
     # re-pricing gates below share the (expensive) per-match scaffolding
     mrows = _matches_with_rows(conn)
@@ -528,8 +548,8 @@ def build(conn) -> str:
     live = bool(derive.SOT_TOTAL_ANCHOR or derive.SOT_TEAM_ANCHOR)
     n, p0, p1 = _sot_split_gain(mrows, conn, tot_c, team_c)
     L.append(f"- **WC_SOT_TOTAL/TEAM_ANCHOR** (split 0.65 -> total {tot_c:g} / team "
-             f"{team_c:g}{', LIVE' if live else ', candidate'}): pooled {p0:+.0f} vs "
-             f"split {p1:+.0f} -> {_verdict(n, p1 - p0)}")
+             f"{team_c:g}{', LIVE' if live else ', candidate (anchors from this sample`s base rates)'}): "
+             f"pooled {p0:+.0f} vs split {p1:+.0f} -> {_verdict(n, p1 - p0)}")
     # WC_KALSHI_NO_SOA: thin-book Kalshi mids vs the book union on score-or-assist
     n, p0, p1 = _kalshi_soa_gain(mrows, conn)
     L.append(f"- **WC_KALSHI_NO_SOA** (score-or-assist: kalshi mid vs book union"

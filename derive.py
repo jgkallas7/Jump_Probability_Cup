@@ -951,9 +951,18 @@ def h_red_card_match(m, g, conn, now):
 
 def h_total_shots_match(m, g, conn, now):
     """'Will there be N or more total shots (on and off target)?' — no total-shots
-    book line; matches average ~25 total shots so 20-22+ is likely. Flat base (the
-    line N barely moves vs the mean), well above the 0.35 catch-all."""
-    return BASE["total_shots_rate"], "base", "total-shots base"
+    book line. Was a flat 0.58 for EVERY N (threshold-blind — the Jul-01 commit
+    audit flagged it as the same defect class as the sot_total leak: '15 or more'
+    and '30 or more' priced identically). Total shots ~ Normal(mean ~24.5 scaled
+    by the market goal environment, sd 6.5); survival at N-0.5. Still environment-
+    level (no team history — that's the validated dead-end), but line-aware:
+    18+ ~0.82, 20+ ~0.78, 25+ ~0.50, 30+ ~0.18 at a neutral goal line."""
+    n = int(g.group(1))
+    _, _, lt = match_lambdas(conn, m, now)
+    mean = 24.5 * (lt / BASE["goals_lambda"])
+    sd = 6.5
+    p = 0.5 * math.erfc((n - 0.5 - mean) / (sd * math.sqrt(2)))
+    return p, "anchored", f"total-shots N({mean:.1f},{sd}) P(>={n})"
 
 
 def h_stoppage_goal(m, g, conn, now):
@@ -995,7 +1004,7 @@ COVERAGE_HANDLERS = [
     (r"both teams .*(?:receive|record|be shown|get|have) (?:at least |1 or more )?"
      r"(?:one |1 |a )?card", h_both_teams_card),
     (r"red card be shown", h_red_card_match),
-    (r"\d+ or more total shots", h_total_shots_match),
+    (r"(\d+) or more total shots", h_total_shots_match),
     (r"goal be scored in (?:first|second)[\s-]half stoppage", h_stoppage_goal),
     (r"goal.*after the second hydration break", h_goal_after_2nd_break),
     (r"[Ww]ill a substitute score a goal", h_substitute_scores),

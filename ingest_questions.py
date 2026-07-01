@@ -118,9 +118,37 @@ def stage_from_advance(text: str) -> str | None:
     return None
 
 
+# Knockout calendar fallback (UTC datetime -> stage). The advance-question signal
+# above misses any KO match that never got an advancement question (found
+# 2026-07-01: 13 of 21 KO matches were still 'group', silently scoring 1x
+# internally — Germany-Paraguay etc.); the final/3rd-place will NEVER have one
+# ("advance to <round>" has no target beyond the final). Boundaries are at 06:00Z
+# so a late-US-evening kickoff (01:00-04:00Z) belongs to the previous US matchday
+# (e.g. Colombia-Ghana Jul-4 01:30Z is the last R32 game). Group play ended with
+# the Jun-28 02:00Z games, so nothing before the first boundary is touched.
+_KO_CALENDAR = [
+    ("2026-06-28T06:00", "2026-07-04T06:00", "r32"),
+    ("2026-07-04T06:00", "2026-07-08T06:00", "r16"),
+    ("2026-07-08T06:00", "2026-07-12T06:00", "qf"),
+    ("2026-07-12T06:00", "2026-07-17T06:00", "sf"),
+    ("2026-07-17T06:00", "2026-07-19T06:00", "third"),
+    ("2026-07-19T06:00", "2026-08-01T00:00", "final"),
+]
+
+
+def stage_from_calendar(kickoff_utc: str) -> str | None:
+    for lo, hi, st in _KO_CALENDAR:
+        if lo <= (kickoff_utc or "") < hi:
+            return st
+    return None
+
+
 def backfill_stages(conn) -> int:
-    """Promote matches to their knockout stage from existing advancement questions.
-    Idempotent; never downgrades (only writes KO stages, never 'group')."""
+    """Promote matches to their knockout stage: first from advancement questions
+    (the contest's own signal), then the KO-calendar fallback for KO matches that
+    never got one. Idempotent; never downgrades (only writes KO stages, never
+    'group'). Also refreshes outcomes.multiplier for already-settled questions of
+    promoted matches (calibrate's upsert froze the multiplier at settle time)."""
     n = 0
     for r in conn.execute("""SELECT match_id, text FROM questions
                              WHERE market_mapping='to_advance'""").fetchall():
@@ -130,6 +158,20 @@ def backfill_stages(conn) -> int:
                 "UPDATE matches SET stage=? WHERE match_id=? AND stage!=?",
                 (st, r["match_id"], st))
             n += cur.rowcount
+    for r in conn.execute("""SELECT match_id, kickoff_utc FROM matches
+                             WHERE stage='group'""").fetchall():
+        st = stage_from_calendar(r["kickoff_utc"])
+        if st:
+            conn.execute("UPDATE matches SET stage=? WHERE match_id=?",
+                         (st, r["match_id"]))
+            n += 1
+    # CASE mirrors config.STAGE_MULTIPLIER (group 1x, all KO rounds 2x, final 3x)
+    conn.execute("""UPDATE outcomes SET multiplier = (
+                        SELECT CASE m.stage
+                            WHEN 'final' THEN 3.0
+                            WHEN 'group' THEN 1.0 ELSE 2.0 END
+                        FROM questions q JOIN matches m USING(match_id)
+                        WHERE q.qid = outcomes.qid)""")
     conn.commit()
     return n
 

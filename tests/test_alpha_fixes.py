@@ -207,3 +207,57 @@ def test_family_classifier_soa_not_own_goal():
     assert fam("Will Belgium have 4 or more shots on target?") == "sot_team"
     assert fam("In the second half, will Spain have more corner kicks than Chile?") \
         == "corners_race_h2"
+
+
+# ---- KO calendar stage fallback (audit: 13/21 KO matches stuck at 'group') ----
+
+def test_stage_from_calendar_boundaries():
+    from ingest_questions import stage_from_calendar
+    assert stage_from_calendar("2026-06-28T02:00:00Z") is None      # last group games
+    assert stage_from_calendar("2026-06-28T19:00:00Z") == "r32"
+    assert stage_from_calendar("2026-07-04T01:30:00Z") == "r32"     # late-US R32 finale
+    assert stage_from_calendar("2026-07-04T17:00:00Z") == "r16"
+    assert stage_from_calendar("2026-07-19T20:00:00Z") == "final"
+    assert stage_from_calendar("2026-06-15T18:00:00Z") is None      # group stage
+
+
+def test_backfill_stages_calendar_and_multiplier():
+    import ingest_questions as iq
+    conn = dbmod.init(":memory:")
+    conn.execute("CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT)")
+    conn.execute("""INSERT INTO matches(match_id, home, away, kickoff_utc, stage)
+                    VALUES ('K1','Germany','Paraguay','2026-06-29T20:30:00Z','group')""")
+    conn.execute("""INSERT INTO questions(qid, match_id, text, status, market_mapping)
+                    VALUES ('Q1','K1','Will Germany win the match?','settled','h2h')""")
+    conn.execute("""INSERT INTO outcomes(qid, resolved_at, outcome, brier, multiplier)
+                    VALUES ('Q1','2026-06-29T23:00:00Z',1,0.1,1.0)""")
+    n = iq.backfill_stages(conn)
+    assert n >= 1
+    assert conn.execute("SELECT stage FROM matches WHERE match_id='K1'").fetchone()[0] == "r32"
+    # settled outcome's frozen 1x multiplier is repaired to the KO 2x
+    assert conn.execute("SELECT multiplier FROM outcomes WHERE qid='Q1'").fetchone()[0] == 2.0
+
+
+# ---- total-shots handler is threshold-aware now (was flat 0.58 for every N) ----
+
+def test_total_shots_threshold_aware():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    def price(n):
+        g = re.search(r"(\d+) or more total shots",
+                      f"Will there be {n} or more total shots (on and off target)?")
+        return derive.h_total_shots_match(M, g, conn, now)[0]
+    p18, p20, p25, p30 = price(18), price(20), price(25), price(30)
+    assert p18 > p20 > p25 > p30            # monotone in the line
+    assert 0.70 < p20 < 0.88                # ~0.78 at a neutral goal line
+    assert p30 < 0.25                       # '30 or more' is no longer 0.58
+
+
+# ---- placeholder ordering: both-teams-card beats the generic cards rule ----
+
+def test_placeholder_both_teams_cards_plural():
+    from placeholders import placeholder_for
+    p, why = placeholder_for("Will both teams receive cards in regulation?")
+    assert p == 0.82, why
+    p, why = placeholder_for("Will both teams receive at least one card?")
+    assert p == 0.82, why

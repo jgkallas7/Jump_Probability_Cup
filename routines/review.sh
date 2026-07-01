@@ -11,6 +11,10 @@ PY="/home/jgkal/.wc_cup_venv/bin/python"
 LOG="/home/jgkal/wc_logs/review.log"
 mkdir -p /home/jgkal/wc_logs
 cd "$REPO"
+# source the live flags so the review's gate lines label LIVE vs candidate
+# truthfully (found 2026-07-01: a flag-free review rendered the live
+# WC_SOT_RACE_DECOMP=1.5 as "candidate" — the exact drift flags.sh exists to stop)
+source "$REPO/routines/flags.sh"
 
 {
   echo "===== review $(date -u +%FT%H:%M) ====="

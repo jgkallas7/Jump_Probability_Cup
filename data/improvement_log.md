@@ -356,3 +356,20 @@ rates). Tests: +14 (tests/test_alpha_fixes.py), suite 107 pass.
 
 ## 2026-07-01 — auto review (review_report.py)
 Realized edge vs consensus clone: -335. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-01.md`.
+
+## 2026-07-01 — auto review (review_report.py)
+Realized edge vs consensus clone: -335. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-01.md`.
+
+## 2026-07-01 (evening) — forensic session/commit audit → 8 live fixes + honesty pass
+Five parallel auditors read every transcript Jun 17–Jul 1 + every commit Jun
+20–30. Durable record: `data/session_audit_2026-07-01.md`. Highlights: the
+widened WC_SOT_THRESH_ANCHOR gate (now scoring the flag's REAL scope incl.
+misfiled team-SOT) flips its verdict to **REJECT −79/n=60** — the live pooled
+0.65 anchor is net-negative; the split anchors are the fix. 13/21 KO matches
+were still stage='group' (1× internal multiplier) → KO-calendar fallback in
+backfill_stages + 101 settled outcomes repaired to 2×. h_total_shots_match was
+threshold-blind (flat 0.58 for every N) → Normal survival. review.sh now
+sources flags.sh (was mislabeling LIVE flags as "candidate"). Honesty labels
+added to the WC_FOULS_DOM and split-anchor gates (same-sample parameter
+selection; re-priced-not-as-sent baselines). Meta-lesson: the recurring failure
+mode is ARCHIVAL — write findings to durable artifacts the same turn.

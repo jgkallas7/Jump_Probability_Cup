@@ -10,4 +10,8 @@ cd "$REPO"
 # before close) re-prices flag-free and strips morning's flagged value. Shared
 # source of truth so they can't drift again (see routines/flags.sh).
 source "$REPO/routines/flags.sh"
+# timestamp each pass — the log was previously undated, which made the Jun-27
+# PATCH-400 retry loop (market locked server-side pre-kickoff) impossible to
+# date during the Jul-01 forensic audit. morning.sh already stamps its runs.
+echo "===== sentinel $(date -u +%FT%H:%M) =====" >> "$LOG"
 $PY sentinel.py >> "$LOG" 2>&1

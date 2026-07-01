@@ -1,8 +1,23 @@
-# Handoff — Jump Probability Cup bot (2026-06-16)
+# Handoff — Jump Probability Cup bot (2026-06-16, refreshed 2026-07-01)
 
 Resume doc for a fresh session. Read this + the auto-loaded `MEMORY.md`. The bot
 competes in the SportsPredict "Probability Cup" (FIFA WC 2026), one forecast per
 contest question, scored **relative to the field** (NOT absolute Brier).
+
+> **2026-07-01 refresh.** Knockouts underway (R32 since Jun 28; 2× multiplier
+> live via ingest_questions stage backfill). Realized standing (parse_locked,
+> 701 settled email Qs): ours +1526 vs field-clone +1860 → **edge −335, of
+> which −318 is the NO_MARKET (alpha) bucket** — see the per-FAMILY table now
+> emitted by review_report.py (the lump hid opposite-signed families). The §2
+> "+110/+28 validated" qmodel claim below is the original tiny-sample result
+> and did NOT generalise — treat `data/alpha_audit_2026-07-01.md` (+ its §5
+> corrections) and `data/improvement_log.md` (2026-07-01 entries) as current
+> truth. Fixes built + committed (214b62e), gates in the nightly review:
+> WC_FOULS_DOM=0.15 (+123/n=55), WC_SOT_TOTAL_ANCHOR=0.78 + WC_SOT_TEAM_ANCHOR
+> =0.42 (+125/n=47), WC_KALSHI_NO_SOA=1 (+28/n=5 thin, structural), all
+> **pending the human flip in routines/flags.sh**. Do NOT set
+> WC_BTS_HALF_ANCHOR (0.68 already optimal). Everything is committed now —
+> the "31 files UNCOMMITTED" note in §1 is obsolete.
 
 ---
 
@@ -14,9 +29,18 @@ contest question, scored **relative to the field** (NOT absolute Brier).
   `WC_*` flag (default OFF) and must beat what-we-send on a clean OOS check first.
   In-sample wins are mirages — this has burned the project repeatedly (see §4).
 
-## 1. WHAT'S LIVE IN PRODUCTION (`routines/morning.sh`, systemd user timers)
+## 1. WHAT'S LIVE IN PRODUCTION (systemd user timers; flags in `routines/flags.sh`
+##    — the SINGLE source, sourced by BOTH morning.sh and sentinel.sh)
+- Live flags as of 2026-07-01: WC_QMODEL, WC_KALSHI, WC_DEVCAP,
+  WC_SOT_THRESH_ANCHOR, WC_PLAYER_SOT_ANCHOR, WC_SOT_RACE_GS(+DECOMP=1.5),
+  WC_TO_ADVANCE_H2H, WC_PH_COVERAGE; WC_KALSHI_HTOTAL=0 (rejected). Each flag's
+  gate + rationale is inline in flags.sh; the nightly review_report re-runs
+  every gate on settled data.
 - `export WC_QMODEL=1` — counted-rate quant pricer for alpha (NO_MARKET) questions.
   **Validated**: clean OOS +110 vs what we sent, +28 vs field over 61 alpha Qs.
+  ⚠️ 2026-07-01: that early aggregate did NOT hold up — realized per-family it
+  wins some buckets (pen_or_red +50, offsides ~0) and lost badly on others
+  (fouls_race −128 pre-fix). Family-level, not engine-level, judgments now.
 - `export WC_KALSHI=1` — Kalshi crowd mids blended/rescued into forecast.py for
   book-mapped totals/corners + score_or_assist via derive. **Validated**: totals
   match sharp book to 0.6pt; corners run +5-7pt high so they're blended (book
@@ -25,9 +49,9 @@ contest question, scored **relative to the field** (NOT absolute Brier).
 - Timers (`systemctl --user list-timers`): wc-morning 07:00, wc-sentinel /15min,
   wc-weekly Sun 19:00, **wc-apifootball 09:00** (historical data accumulation).
   **wc-improve is DISABLED** (security — see §5).
-- 31 tests pass (`python -m pytest -q`). Branch `master`, **31 files UNCOMMITTED**
-  (the whole session's work — user gates commits; the self-improvement loop needs
-  a committed baseline to function, see §5).
+- 107 tests pass (`python -m pytest -q`). Branch `master`, fully committed
+  through 214b62e (2026-07-01) — the committed baseline §5's improvement loop
+  needs now exists.
 
 ## 2. THE PRICING ENGINE (new this session)
 - `qprice.py` — pure scipy pricers (Poisson survival, Skellam, bivariate Poisson,
@@ -85,6 +109,18 @@ contest question, scored **relative to the field** (NOT absolute Brier).
   option in this WSL). Cost is NOT a factor (Max subscription covers claude -p).
 
 ## 6. OPEN TASKS / NEXT STEPS
+- **#11 (2026-07-01) — flag flips pending the human** (see the refresh note at
+  top): WC_FOULS_DOM=0.15, WC_SOT_TOTAL_ANCHOR=0.78, WC_SOT_TEAM_ANCHOR=0.42,
+  WC_KALSHI_NO_SOA=1 in routines/flags.sh. Optional: WC_CORNER_SUP_SLOPE=0.5
+  (gate thin, accumulating). Then WATCH the family table + gates nightly.
+- **#12 — final/3rd-place stage population** (no advancement question names the
+  round for the final → needs a KO-calendar fallback so the 3× multiplier isn't
+  stripped; see MEMORY.md header note).
+- **#13 — sentinel PATCH-400 loop**: markets can lock server-side BEFORE
+  kickoff; sentinel retries a locked prediction every 15 min until settle
+  (Colombia–DR Congo Jun-27: revisions 56→63 / 30→26 were LOST). Consider
+  marking a 400'd prediction final locally + reading the market's real close
+  time. Log now timestamped (sentinel.sh) so future loops are datable.
 - **#9 — matchday-2 team-rate check (LIVE in-tournament rates, ≠ the rejected
   historical priors).** All 24 teams still have 1 WC game. When matchday-2 settles
   + locked emails arrive: harvest emails (Gmail MCP), `team_rates.py refresh`,

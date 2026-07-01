@@ -24,7 +24,7 @@ from datetime import datetime, timedelta, timezone
 import db
 from config import BOOK_WEIGHTS, DEFAULT_BOOK_WEIGHT, THIN_MARKET_EXTRA_WEIGHTS
 from devig import shrink_extremes
-from forecast import MAX_SNAP_AGE_MIN, consensus, resolve_team
+from forecast import MAX_SNAP_AGE_MIN, _player_tokens, consensus, resolve_team
 
 ALPHA_REVISE_PTS = 3   # alpha derivations churn more than book consensus
 
@@ -46,6 +46,15 @@ KALSHI_ON = os.environ.get("WC_KALSHI", "") == "1"
 _KALSHI_CLIENT = None
 _KALSHI_BOOK: dict[str, dict] = {}
 
+# Kalshi score-or-assist mids come from THIN player-prop orderbooks and mid()
+# has no spread guard — a wide book (bid 0.10 / ask 0.80) pins the mid near 0.5
+# regardless of truth. Realized (2026-07-01): kalshi-priced SOA edge -40 over
+# n=5 settled rows, avg sent 0.49 on questions resolving YES 20%; the book-union
+# h_score_or_assist tracked the field (-5 over n=6). WC_KALSHI_NO_SOA=1 skips
+# Kalshi for the score-or-assist family so it falls through to the book union.
+# Default OFF = today's routing. A human flips it (review_report gate).
+KALSHI_NO_SOA = os.environ.get("WC_KALSHI_NO_SOA", "") == "1"
+
 # SOT-threshold base anchor (OFF by default, WC_SOT_THRESH_ANCHOR). Our raw
 # counted-rate Poisson survival systematically UNDER-prices "N-or-more shots on
 # target" questions: contest SOT lines are written low, so they resolve YES
@@ -59,6 +68,16 @@ _KALSHI_BOOK: dict[str, dict] = {}
 SOT_THRESH_ANCHOR_ON = os.environ.get("WC_SOT_THRESH_ANCHOR", "") == "1"
 SOT_ANCHOR = float(os.environ.get("WC_SOT_ANCHOR", "0.65"))
 SOT_BETA = float(os.environ.get("WC_SOT_BETA", "0.5"))
+
+# The pooled 0.65 anchor averages two families with OPPOSITE biases (settled
+# outcomes, 2026-07-01): TOTAL-SOT thresholds resolve YES 84% (n=19 — the
+# contest writes those lines low) while TEAM-SOT thresholds resolve 39% (n=33).
+# Blending team-SOT UP toward 0.65 is actively wrong; the 06-22 "+38 pooled"
+# validation hid the split. These knobs split the anchor by family; unset
+# (default) each inherits SOT_ANCHOR, i.e. exactly today's behaviour. The
+# review_report gate sweeps candidates; a human sets them in flags.sh.
+SOT_TOTAL_ANCHOR = float(os.environ.get("WC_SOT_TOTAL_ANCHOR", "0") or 0) or None
+SOT_TEAM_ANCHOR = float(os.environ.get("WC_SOT_TEAM_ANCHOR", "0") or 0) or None
 
 # --- 2H SOT-race de-compression (WC_SOT_RACE_DECOMP) -------------------------
 # The team-vs-team "more SOT than" race was long believed a contrarian edge: we
@@ -110,6 +129,9 @@ RACE_GS_ON = os.environ.get("WC_SOT_RACE_GS", "") == "1"
 # re-priced-vs-placeholder edge on settled questions (parse_locked) before flip.
 PH_COVERAGE_ON = os.environ.get("WC_PH_COVERAGE", "") == "1"
 
+# corner_share() supremacy-fallback slope (see comment at the fallback).
+CORNER_SUP_SLOPE = float(os.environ.get("WC_CORNER_SUP_SLOPE", "") or 0.20)
+
 
 def is_sot_threshold(text: str) -> bool:
     """A 'shots on target' threshold question THIS FLAG SHOULD ANCHOR. Single
@@ -128,14 +150,24 @@ def is_sot_threshold(text: str) -> bool:
     return not ("more" in t and "than" in t)    # exclude '...more SOT than...' race
 
 
+def _sot_anchor_value(text):
+    """Family-specific anchor: total-SOT vs team-SOT settle at opposite base
+    rates (84% vs 39%), so each family gets its own knob, falling back to the
+    pooled SOT_ANCHOR when unset (the default = current behaviour)."""
+    if "total shots on target" in text.lower():
+        return SOT_TOTAL_ANCHOR or SOT_ANCHOR
+    return SOT_TEAM_ANCHOR or SOT_ANCHOR
+
+
 def _apply_sot_anchor(text, res):
-    """Blend a SOT-threshold price toward the SOT_ANCHOR base rate. No-op when
-    the flag is off, the result is empty, or the question isn't a SOT threshold."""
+    """Blend a SOT-threshold price toward its family's anchor base rate. No-op
+    when the flag is off, the result is empty, or it isn't a SOT threshold."""
     if res is None or not SOT_THRESH_ANCHOR_ON or not is_sot_threshold(text):
         return res
     prob, tier, reason = res
-    blended = (1 - SOT_BETA) * prob + SOT_BETA * SOT_ANCHOR
-    return blended, tier, f"{reason} | sotanchor {prob:.2f}->{blended:.2f}"
+    anchor = _sot_anchor_value(text)
+    blended = (1 - SOT_BETA) * prob + SOT_BETA * anchor
+    return blended, tier, f"{reason} | sotanchor@{anchor:.2f} {prob:.2f}->{blended:.2f}"
 
 
 def is_sot_race(text: str) -> bool:
@@ -178,6 +210,8 @@ def _kalshi_price(conn, m, text):
     """Try a live Kalshi mid for this question. Fully guarded — any failure
     (auth, network, no market) returns None and the pipeline proceeds."""
     global _KALSHI_CLIENT
+    if KALSHI_NO_SOA and "score or assist" in text.lower():
+        return None   # thin-book mids mislead here; use the book union instead
     try:
         import kalshi_wc
         if _KALSHI_CLIENT is None:
@@ -270,6 +304,7 @@ BASE = {
     "sub_goal_share": 0.13,    # subs scored 13.2% of goals at recent WC/Euros (PMC11167463)
     # --- no-book prop fallbacks (market-anchored where possible; flat where the rate
     #     is environment-level — team history regressed 3x OOS, see CLAUDE.md dead-ends)
+    "corner_share_first30": 0.28,  # corners mildly back-loaded: h1 share 0.44 x ~2/3
     "own_goal_rate": 0.07,        # own goal in a match — rare, ~6-8% (environment-level)
     "red_card_match_rate": 0.16,  # >=1 red card in a match (~WC base; environment-level)
     "total_shots_rate": 0.58,     # P(>=20-22 total shots) — matches avg ~25 (flat base)
@@ -385,7 +420,12 @@ def corner_share(conn, m, team, now):
         shares.sort()
         return shares[len(shares) // 2], "derived"
     p_win = mprob(conn, m["match_id"], "h2h", team, None, now) or 0.5
-    return 0.5 + 0.20 * (p_win - 0.5) / 0.5 * 0.5, "anchored-supremacy"
+    # Fallback slope: at 0.20 the tilt caps at ±0.10 while ladder-implied shares
+    # routinely run ±0.17 from parity — the same right-sign-too-weak defect class
+    # as the old h_fouls_race (the two settled races priced here lost -32.5
+    # combined, both under-tilted). WC_CORNER_SUP_SLOPE strengthens it; default
+    # 0.20 is bit-identical to the old constant. Gate in review_report (thin n).
+    return 0.5 + CORNER_SUP_SLOPE * (p_win - 0.5), "anchored-supremacy"
 
 
 def goal_share(conn, m, team, now):
@@ -581,8 +621,13 @@ def _player_prob(conn, match_id, market, player, suffix, now):
     """Weighted consensus that a player hits the `suffix` side ('Yes' for
     anytime-scorer, 'Over' for assists). Matches name TOKENS, since book name
     orders differ ('Heung-Min Son' vs 'Son Heung-min'). Returns prob or None.
-    Mirrors forecast.consensus weighting (whitelist + thin-market extras)."""
-    tokens = [x for x in re.split(r"[\s\-]+", player.strip()) if len(x) > 2]
+    Mirrors forecast.consensus weighting (whitelist + thin-market extras).
+    Name tokens via forecast._player_tokens — the KO slate writes 'Kevin De
+    Bruyne (Belgium)' with accents while books store ASCII, country-free names;
+    the old naive tokenizer kept '(Belgium)' and never matched a book line, so
+    every KO score-or-assist fell through to Kalshi/placeholder (cc4a453 fixed
+    forecast.py but missed this twin)."""
+    tokens = _player_tokens(player)
     if not tokens:
         return None
     clause = " AND ".join(["outcome LIKE ?"] * len(tokens)) + " AND outcome LIKE ?"
@@ -851,6 +896,38 @@ def h_team_sot_total(m, g, conn, now):
     return p_geq(lam, n), "derived", f"team-SOT lam={lam:.2f} P(>={n})"
 
 
+def h_corners_before_hydration(m, g, conn, now):
+    """'Will N or more corner kicks be taken before the first hydration break?' —
+    the ~30' cooling break. Market-anchored on the corners line; corners are
+    mildly back-loaded (h1 share 0.44), so ~0.28 of the match lambda lands before
+    30'. New knockout-slate wording (2026-07-01) that fell to the placeholder."""
+    k = int(g.group(1))
+    lam, tier = corners_lambda(conn, m, now)
+    lam30 = lam * BASE["corner_share_first30"]
+    return p_geq(lam30, k), tier, f"corners-by-1st-break lam30={lam30:.2f}"
+
+
+def h_team_corners_atleast_half(m, g, conn, now):
+    """'Will X have at least N corner kicks (in the first/second half)?' — the
+    'at least' wording missed h_team_corners's 'N or more' regex and fell to the
+    0.45 placeholder (settled example: Argentina >=1 corner in H1 — field 0.83,
+    we sent 0.45, -27). Same market-anchored pricer: corners lambda x team share
+    (spread ladder / supremacy) x half share -> Poisson survival."""
+    team = resolve_team(g.group(1), m["home"], m["away"])
+    if not team:
+        return None
+    k = int(g.group(2))
+    half = (g.group(3) or "").lower()
+    lam, _ = corners_lambda(conn, m, now)
+    share, tier = corner_share(conn, m, team, now)
+    lam_t = lam * share
+    if "first" in half:
+        lam_t *= BASE["h1_corner_share"]
+    elif "second" in half:
+        lam_t *= BASE["h2_corner_share"]
+    return p_geq(lam_t, k), tier, f"team corners(at-least) lam={lam_t:.2f} P(>={k})"
+
+
 def h_own_goal(m, g, conn, now):
     """'Will an own goal be scored?' — environment-level base rate (~7%); team form
     doesn't move it. The flat 0.35 catch-all was 5x too high."""
@@ -910,6 +987,10 @@ COVERAGE_HANDLERS = [
     (r"card be shown in the first half", h_card_in_first_half),
     (r"[Ww]ill (.+?) have (?:at least )?(\d+)(?: or more)? shots on target",
      h_team_sot_total),
+    (r"(\d+) or more corner kicks be taken before the first hydration break",
+     h_corners_before_hydration),
+    (r"[Ww]ill (.+?) have at least (\d+) corner kicks?"
+     r"(?: in the (first|second) half)?", h_team_corners_atleast_half),
     (r"own goal be scored", h_own_goal),
     (r"both teams .*(?:receive|record|be shown|get|have) (?:at least |1 or more )?"
      r"(?:one |1 |a )?card", h_both_teams_card),

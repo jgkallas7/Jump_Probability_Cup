@@ -250,3 +250,109 @@ Realized edge vs consensus clone: -322. Flag-validation gate + per-bucket edges 
 
 ## 2026-06-30 — auto review (review_report.py)
 Realized edge vs consensus clone: -335. Flag-validation gate + per-bucket edges in `data/reviews/2026-06-30.md`.
+
+## 2026-07-01 — auto review (review_report.py)
+Realized edge vs consensus clone: -335. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-01.md`.
+
+## 2026-07-01 — WC_FOULS_DOM (fouls-race game-state tilt) — APPROVE (the biggest single alpha fix)
+Broke the −318 NO_MARKET leak down by question FAMILY (not just the lumped bucket):
+the single biggest leak is **fouls_race −128 over 55 Qs** ("Will X commit more fouls
+than Y?"). ROOT CAUSE: qmodel priced it from each team's OWN counted foul rate — a
+~symmetric Skellam that lands ~0.46 for EVERY matchup regardless of who is favoured
+(the tie split). But the underdog reliably commits MORE fouls (less possession, more
+chasing) — a game-state effect the crowd prices (field ~0.55–0.62 on underdog-first
+questions, resolving YES) and we threw away. Two contradictions this exposes: (a) the
+"qmodel = calibrated math beating crowd overconfidence" thesis is REVERSED here — the
+crowd is better-calibrated because it prices a real effect we ignore; (b) the OLD
+derive handler `h_fouls_race` had the right sign ("underdogs foul more (weak)") but a
+±0.08 coefficient — AND `WC_QMODEL=1` preempts it, so the symmetric qmodel shadows the
+directionally-correct heuristic. Net: the counted-rate "upgrade" was a regression on
+this bucket.
+BUILT (`qmodel._foul_dom`, flag `WC_FOULS_DOM` = tilt slope, default 0.0 = today's
+symmetric price): tilt the two foul rates by market goal-share — underdog ×(1+slope·
+(0.5−share)·2) up, favourite down — the INVERSE of the existing `_dom()` shot-volume
+scaling. Pricer-level, no new data source (goal-share is the market λ we already read).
++5 tests (`tests/test_fouls_dom.py`); full suite 93 pass. Gate wired into review_report
+(`_fouls_dom_gain`, re-prices at the live/candidate slope, PRIOR-ONLY = clean).
+OOS EVIDENCE (re-pricing the 55 settled fouls_race Qs; goal-λ clamped to the last
+pre-kickoff snapshot = no in-play look-ahead; realized relative points):
+  - CLEAN prior-only (foul base symmetric → the goal-share tilt is the ENTIRE signal):
+    slope 0.00 → **+54** (−68 vs field-clone) ; 0.10 → +161 ; **0.15 → +177 (+123 vs
+    slope-0, and +55 ABOVE the field-clone)** ; 0.20 → +170 ; 0.25 → +146 ; 0.40 → +11.
+  - FULL counted rates (mild look-ahead) agree: joint peak at slope 0.15 (+102 vs
+    slope-0, +114 vs field-clone). Peak is INTERIOR (not a grid-edge overfit) and the
+    0.10–0.20 plateau is flat.
+  - per-question at 0.20: 31 improve / 23 worsen (regressions are upsets where the
+    field ALSO lost, e.g. Norway>Iraq YES); not outlier-driven.
+  - review_report gate: symmetric +54 vs tilted +177 → APPROVE (gain +123 over n=55) —
+    the LARGEST approved gain of any live-or-candidate flag.
+This is the legitimate "beat the crowd" result the qmodel thesis promised (we exceed
+the field-clone at the optimum), restored by adding the one signal the crowd uses.
+RECOMMENDATION: **APPROVE at slope 0.15** (joint OOS peak, gentle, interior; anything
+in 0.10–0.20 captures ~the same gain). Ship gentle here means NOT over-tilting past
+the peak (≥0.45 flips to a loss). WATCH: re-check the fouls_race bucket edge in
+review_report over the next matchdays; if the WC_FOULS_DOM gate slides to HOLD, lower
+the slope. Note the KNOCKOUT 2× multiplier makes this bucket worth double — high value
+through the bracket.
+ENABLE: add `export WC_FOULS_DOM=0.15` to `routines/flags.sh` (next to the SOT flags).
+Code never auto-edits flags.sh — a human flips it.
+
+## 2026-07-01 (later) — alpha-family audit round 2: the audit's own errors, + 5 fixes
+Re-derived the family breakdown with per-question pricing attribution (which
+HANDLER priced each settled row) and the full outcomes table (every settled Q,
+not just the email corpus). TWO findings in the morning audit itself were wrong:
+
+1. **"own_goal −55" was a MISCLASSIFIED family.** Every score-or-assist question
+   contains "(excluding own goals)", which the family regex swallowed. The real
+   own-goal handler has n=1 settled (a NO; 0.07 is fine). The −55 lives in
+   **score_or_assist**, split: kalshi-mid-priced −40/n=5 (sent ~0.49 on questions
+   resolving 20% YES — `kalshi_wc.mid()` has NO spread guard, and thin player
+   books pin the mid near 0.5), book-union −5/n=6, placeholder −17/n=9.
+   ROOT CAUSE the union rarely fires: `derive._player_prob` still used the naive
+   tokenizer — cc4a453 added `_player_tokens` (strip "(Belgium)", fold accents)
+   to forecast.py but MISSED the derive twin, so every KO-worded score-or-assist
+   failed book matching and fell to kalshi/placeholder. **FIXED** (derive now
+   uses forecast._player_tokens) + **WC_KALSHI_NO_SOA** flag routes SOA away
+   from kalshi mids to the book union (gate: kalshi-sent −24 vs union +4, n=5
+   thin → formal HOLD, but the defect is structural; recommend ON).
+2. **"raise the both-teams-SOT half anchor 0.68 → 0.72" was BACKWARDS.** Post-fix
+   submissions averaged 0.70 vs field 0.63 on a family settling 62-67% YES.
+   Swept 0.58-0.72: **0.68 is already the optimum** (0.63 −0.8, 0.72 −2.2).
+   Shipped the knob (WC_BTS_HALF_ANCHOR, default 0.68) + gate; recommend NO flip.
+
+And three real improvements, all flag-gated default-current, gates in review_report:
+
+3. **WC_SOT_TOTAL_ANCHOR / WC_SOT_TEAM_ANCHOR — the big one (+125, n=47).**
+   The pooled 0.65 SOT anchor averages two families with OPPOSITE biases:
+   total-SOT thresholds settle **84% YES** (n=19; the contest writes the lines
+   low) while team-SOT settles **39%** (n=33). Split-anchor sweep (raw prices
+   re-computed prior-only, blended per family): total 0.78 → +49 (sens-drop3
+   +36), team 0.42 → +76 (sens +36); combined gate **APPROVE +125 over n=47** —
+   as large as WC_FOULS_DOM. Grid note: total's curve is monotone to 0.85 (grid
+   edge) — 0.78 is the deliberately conservative pick, same convention as
+   RACE_DECOMP. ENABLE: `export WC_SOT_TOTAL_ANCHOR=0.78` +
+   `export WC_SOT_TEAM_ANCHOR=0.42` in flags.sh.
+4. **Corner races are NOT "same tilt as fouls" (morning audit hand-wave).**
+   Split: h1 races **+32** (7/7 NO — tie-dense half, we're correctly low), team
+   corners +21, h2 races **−58** (8/9 YES). The h2 bleed concentrates in the
+   `anchored-supremacy` fallback (2 settled rows, −32.5): its tilt caps at ±0.10
+   while spread-ladder-implied shares run ±0.17 — the same right-sign-too-weak
+   defect as old h_fouls_race. Shipped **WC_CORNER_SUP_SLOPE** (default 0.20 =
+   bit-identical old behaviour; candidate 0.50 → +17 on n=2, gate HOLD-thin,
+   accumulates as KOs settle). A blanket corners tilt would have destroyed the
+   winning h1 side — evidence beats mechanism-by-analogy.
+5. **Two corner coverage gaps → WC_PH_COVERAGE handlers** (fallback-only, never
+   override a pricer): "N or more corner kicks before the first hydration break"
+   (OPEN question today; was placeholder-bound) and "Will X have at least N
+   corner kicks [in the half]" ('at least' defeated h_team_corners's 'N or more'
+   regex — the settled Argentina example bled −27 vs field 0.83).
+
+WORKFLOW: review_report now prints a **NO_MARKET by-family table** (worst-first,
+with our_p/field_p/yes%) — the single lumped bucket is what let fouls_race hide
+for two weeks and mislabelled own_goal today — and `_alpha_family` classifies
+score-or-assist BEFORE own-goal so the mislabel can't recur. All re-pricing
+gates share `_matches_with_rows` scaffolding (pre-kickoff lambdas, prior-only
+rates). Tests: +14 (tests/test_alpha_fixes.py), suite 107 pass.
+
+## 2026-07-01 — auto review (review_report.py)
+Realized edge vs consensus clone: -335. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-01.md`.

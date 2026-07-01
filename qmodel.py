@@ -15,6 +15,7 @@ The caller supplies live `rates` and `lam`; this module is pure given them.
 """
 from __future__ import annotations
 
+import os
 import re
 
 import qprice
@@ -24,6 +25,22 @@ from forecast import resolve_team
 # does move shot volume (you shoot more vs a team camped in its box). Scale shot
 # & SOT rates by how dominant the team is, centered on parity. Mild slope.
 DOM_SLOPE = 0.5
+
+# fouls run the OTHER way to shots: the UNDERDOG commits more (less possession,
+# more chasing/tactical fouling) — a robust game-state effect the crowd prices
+# and a symmetric counted-rate Skellam misses (the fouls_race bucket was the
+# single biggest alpha leak vs the field, -128 pts / 55 Qs; the old derive
+# handler h_fouls_race had the right sign but a ~0.08 coefficient, too weak, and
+# WC_QMODEL preempts it). WC_FOULS_DOM is the tilt slope; 0.0 = OFF = the exact
+# symmetric behaviour we ship today. A human flips it after the OOS gate.
+FOUL_DOM_SLOPE = float(os.environ.get("WC_FOULS_DOM", "0") or 0)
+
+# both-teams >=1 SOT in a HALF: the hand-set 0.68 anchor overshot — post-fix
+# submissions averaged 0.70 vs a 0.63 field on questions that settle YES ~65%
+# (h1 62% n=8, h2 67% n=9 in the outcomes table), realizing -26 over n=10.
+# WC_BTS_HALF_ANCHOR moves the anchor; default 0.68 = today's behaviour
+# (candidate 0.63 — review_report gate; a human flips it in flags.sh).
+BTS_HALF_ANCHOR = float(os.environ.get("WC_BTS_HALF_ANCHOR", "0.68") or 0.68)
 
 
 def _r(rates, team, stat, default=None):
@@ -41,6 +58,17 @@ def _dom(lam_team, lam_opp):
         return 1.0
     share = lam_team / tot
     return 1.0 + DOM_SLOPE * (share - 0.5) * 2  # share .5->1.0, .65->1.15
+
+
+def _foul_dom(lam_team, lam_opp):
+    """foul-volume multiplier from goal-rate dominance, INVERSE of _dom(): the
+    underdog (goal-share < 0.5) fouls MORE, the favorite fouls LESS. Centered at
+    1.0; slope = WC_FOULS_DOM (0.0 -> flat 1.0, i.e. current symmetric prices)."""
+    tot = (lam_team or 0) + (lam_opp or 0)
+    if tot <= 0:
+        return 1.0
+    share = lam_team / tot
+    return 1.0 + FOUL_DOM_SLOPE * (0.5 - share) * 2  # underdog .35->1+0.3*slope
 
 
 def _half_word(text):
@@ -67,7 +95,9 @@ def price_question(text, home, away, rates, lam):
         return (qprice.clip(qprice.prob_n_or_more(rate, n)),
                 f"offsides counted lam={rate:.2f} P(>={n})")
 
-    # --- fouls race: counted foul rates -> Skellam (was 'underdogs foul, weak') ---
+    # --- fouls race: counted foul rates, tilted by game-state (underdog fouls
+    # more), -> Skellam. The tilt (_foul_dom) is the fix for the -128 leak; with
+    # WC_FOULS_DOM=0 it's a no-op and this is the old symmetric counted price. ---
     m = re.search(r"Will (.+?) commit more fouls than (.+?)\?", t)
     if m:
         a = resolve_team(m.group(1), home, away)
@@ -75,6 +105,10 @@ def price_question(text, home, away, rates, lam):
         if not a or not b:
             return None
         ra, rb = _r(rates, a, "fouls", 12.7), _r(rates, b, "fouls", 12.7)
+        la = lam_h if a == home else lam_a
+        lb = lam_h if b == home else lam_a
+        ra *= _foul_dom(la, lb)
+        rb *= _foul_dom(lb, la)
         return (qprice.clip(qprice.prob_a_more_than_b(ra, rb)),
                 f"fouls race Skellam {ra:.1f} vs {rb:.1f}")
 
@@ -114,8 +148,9 @@ def price_question(text, home, away, rates, lam):
             s = qprice.H1_SHARE["sot"]
             frac = s if half == "h1" else (1 - s)
             p_raw = (1 - qprice.np.exp(-sot_h * frac)) * (1 - qprice.np.exp(-sot_a * frac))
-            p = 0.30 * p_raw + 0.70 * 0.68
-            return (qprice.clip(p), f"both>=1 SOT {half} base+ raw={p_raw:.2f}")
+            p = 0.30 * p_raw + 0.70 * BTS_HALF_ANCHOR
+            return (qprice.clip(p),
+                    f"both>=1 SOT {half} base@{BTS_HALF_ANCHOR:.2f} raw={p_raw:.2f}")
         p_raw = (1 - qprice.np.exp(-sot_h)) * (1 - qprice.np.exp(-sot_a))
         p = 0.75 * p_raw + 0.25 * 0.80     # overdispersion guard (full match)
         return (qprice.clip(p), f"both>=1 SOT {sot_h:.2f}/{sot_a:.2f} raw={p_raw:.2f}")

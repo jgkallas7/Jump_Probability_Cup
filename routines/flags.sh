@@ -102,6 +102,15 @@ export WC_CORNER_SUP_SLOPE=0.5
 # WC_BTS_HALF_ANCHOR deliberately NOT set: the 0.68 default is already the
 # sweep optimum (0.63 −0.8, 0.72 −2.2 — the morning audit's "raise it" was
 # backwards). The knob + gate exist for future evidence.
+# Referee cards multiplier (HANDOFF #10, built 2026-07-02): scales card-level
+# lambdas by the assigned ref's historical cards/match (API-Football 2022-24,
+# shrunk n/(n+6), clamped 0.75-1.35) on the tiers with NO book cards line
+# (43/53 settled card-level rows priced bookless). Races cancel the ref;
+# derived tier is market-priced — untouched. OFF pending its review_report
+# gate (_ref_cards_gain): the FBref schedule cache only carries refs for the
+# early matchdays so far (refresh in review.sh backfills nightly); flip when
+# the gate clears at n >= 8.
+export WC_REF_CARDS=0
 # Player-SOT over-pricing anchor: shade book-mapped player ">=1 shot on target"
 # props DOWN toward 0.30 at beta=0.5 (player-subject only; mis-mapped team SOT
 # totals excluded). ENABLED 2026-06-23 after its gate cleared: review_report

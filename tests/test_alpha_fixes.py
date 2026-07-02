@@ -349,3 +349,41 @@ def test_dead_stat_column_not_zeroed():
     col = tr._find_col_with_data(df, ("PKwon", "Performance_PKwon", "Standard_PKatt"))
     assert col == "Standard_PKatt"   # dead all-NaN column skipped, live fallback used
     assert tr._find_col_with_data(df, ("Performance_PKwon",)) is None
+
+
+# ---- half-scoped 'at least N SOT' handler (the half_other -42 cluster) ----
+
+def test_player_sot_half_from_book_line():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    # book: P(Kane >=1 SOT full match) = 0.70 at the 0.5 line; a 1.5-line row
+    # must NOT contaminate the lookup (the point filter)
+    _snap(conn, "player_shots_on_target", "Harry Kane Over", 0.5, 0.70)
+    _snap(conn, "player_shots_on_target", "Harry Kane Over", 1.5, 0.30)
+    res = _coverage_price(conn, "Will Harry Kane have at least 1 shot on "
+                          "target in the second half?", now)
+    assert res is not None
+    p, tier, reason = res
+    assert tier == "derived-mkt" and "O0.5=0.70" in reason
+    # lam_full=-ln(0.30)=1.204, h2 share 0.54 -> lam 0.65 -> P(>=1)=0.478
+    assert abs(p - (1 - 2.718281828 ** -(1.204 * 0.54))) < 0.01
+
+
+def test_team_sot_half_shares_correct():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    r1 = _coverage_price(conn, "Will Belgium have at least 1 shot on target "
+                         "in the first half?", now)
+    r2 = _coverage_price(conn, "Will Belgium have at least 1 shot on target "
+                         "in the second half?", now)
+    assert r1 and r2
+    assert r1[0] < r2[0]     # h1 share (0.46) < h2 share (0.54) — the old bool
+    #                          half-flag applied the H2 share to BOTH halves
+
+
+def test_player_sot_half_no_book_line_falls_through():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    res = _coverage_price(conn, "Will Eldor Shomurodov have at least 1 shot "
+                          "on target in the second half?", now)
+    assert res is None       # -> family placeholder (0.25), not a crash

@@ -132,6 +132,29 @@ PH_COVERAGE_ON = os.environ.get("WC_PH_COVERAGE", "") == "1"
 # corner_share() supremacy-fallback slope (see comment at the fallback).
 CORNER_SUP_SLOPE = float(os.environ.get("WC_CORNER_SUP_SLOPE", "") or 0.20)
 
+# Referee cards multiplier (WC_REF_CARDS, default OFF — HANDOFF #10). Scales
+# card-level lambdas by the assigned ref's historical cards-per-match (shrunk,
+# clamped; ref_rates.py). Applies ONLY where no book cards line prices the ref
+# already: the BASE fallback in cards_lambda and qmodel's counted total-cards.
+# Races cancel the ref; derived-tier is market-priced — both untouched.
+REF_CARDS_ON = os.environ.get("WC_REF_CARDS", "") == "1"
+_REF_MULT: dict[str, tuple[float, str | None]] = {}
+
+
+def _ref_cards_mult(conn, m):
+    """Per-match (multiplier, ref) — cached; (1.0, None) on any failure."""
+    mid = m["match_id"]
+    if mid not in _REF_MULT:
+        try:
+            import ref_rates
+            row = conn.execute("SELECT kickoff_utc FROM matches WHERE match_id=?",
+                               (mid,)).fetchone()
+            _REF_MULT[mid] = ref_rates.cards_multiplier(
+                m["home"], m["away"], row["kickoff_utc"] if row else "")
+        except Exception:
+            _REF_MULT[mid] = (1.0, None)
+    return _REF_MULT[mid]
+
 
 def is_sot_threshold(text: str) -> bool:
     """A 'shots on target' threshold question THIS FLAG SHOULD ANCHOR. Single
@@ -246,7 +269,12 @@ def _qmodel_price(conn, m, text, now):
     mid = m["match_id"]
     if mid not in _QM_LAM:
         _QM_LAM[mid] = match_lambdas(conn, m, now)
-    res = qmodel.price_question(text, m["home"], m["away"], _QM_RATES, _QM_LAM[mid])
+    rates = _QM_RATES
+    if REF_CARDS_ON:
+        mult, _ = _ref_cards_mult(conn, m)
+        if mult != 1.0:
+            rates = {**_QM_RATES, "_ref_cards": mult}
+    res = qmodel.price_question(text, m["home"], m["away"], rates, _QM_LAM[mid])
     if res is None:
         return None
     prob, reason = res
@@ -379,8 +407,11 @@ def cards_lambda(conn, m, now):
         p_over = mprob(conn, m["match_id"], "alternate_totals_cards", "Over",
                        line, now)
         if p_over is not None:
-            return lam_from_over(p_over, line), "derived"
-    return BASE["cards_lambda"], "base"
+            return lam_from_over(p_over, line), "derived"   # book prices the ref
+    lam = BASE["cards_lambda"]
+    if REF_CARDS_ON:
+        lam *= _ref_cards_mult(conn, m)[0]
+    return lam, "base"
 
 
 def corners_lambda(conn, m, now):
@@ -477,12 +508,16 @@ def _team_sot_price(m, team, k, half, conn, now):
     formulas (this damped one vs a raw-goal-share one in the coverage handler
     — underdog 7+ priced 0.232 vs 0.028 by phrasing). Consolidated on the
     incumbent: the raw-share variant scored +15/n=29 better anchored, but
-    that's same-sample noise, and consistency is the actual defect."""
+    that's same-sample noise, and consistency is the actual defect.
+    half: None (full match), 'h1', or 'h2' — the old bool applied the H2 share
+    to first-half questions (latent share bug, fixed 2026-07-02)."""
     _, _, lt = match_lambdas(conn, m, now)
     lam = BASE["sot_lambda"] * (lt / BASE["goals_lambda"]) \
         * sot_share(conn, m, team, now)
-    if half:
+    if half == "h2":
         lam *= BASE["h2_sot_share"]
+    elif half == "h1":
+        lam *= 1 - BASE["h2_sot_share"]
     p = 0.5 + 0.6 * (p_geq(lam, k) - 0.5)  # damped: weakest family (review)
     return p, "anchored", f"team sot lam={lam:.2f} damped0.6"
 
@@ -491,7 +526,9 @@ def h_team_sot(m, g, conn, now):
     team = resolve_team(g.group(1), m["home"], m["away"])
     if not team:
         return None  # player SOT questions are book-mapped, not derived
-    return _team_sot_price(m, team, int(g.group(2)), bool(g.group(3)), conn, now)
+    half_txt = (g.group(3) or "").lower()
+    half = "h1" if "first" in half_txt else "h2" if "second" in half_txt else None
+    return _team_sot_price(m, team, int(g.group(2)), half, conn, now)
 
 
 def h_pen_or_red(m, g, conn, now):
@@ -626,7 +663,7 @@ def h_first_goal_h2(m, g, conn, now):
 PLAYER_ONE_SIDED_HAIRCUT = {"player_goal_scorer_anytime": 0.93, "player_assists": 0.90}
 
 
-def _player_prob(conn, match_id, market, player, suffix, now):
+def _player_prob(conn, match_id, market, player, suffix, now, point=None):
     """Weighted consensus that a player hits the `suffix` side ('Yes' for
     anytime-scorer, 'Over' for assists). Matches name TOKENS, since book name
     orders differ ('Heung-Min Son' vs 'Son Heung-min'). Returns prob or None.
@@ -640,12 +677,17 @@ def _player_prob(conn, match_id, market, player, suffix, now):
     if not tokens:
         return None
     clause = " AND ".join(["outcome LIKE ?"] * len(tokens)) + " AND outcome LIKE ?"
+    # point filter matters for laddered player markets (SOT quotes 0.5/1.5/2.5;
+    # without it GROUP BY book returns an arbitrary line's prob). None = any
+    # line (correct for single-line markets like anytime-scorer/assists).
+    pt_clause = " AND point = ?" if point is not None else ""
     cutoff = (now - timedelta(minutes=MAX_SNAP_AGE_MIN)).isoformat()
-    params = [match_id, market] + [f"%{t}%" for t in tokens] \
-        + [f"% {suffix}", cutoff, now.isoformat()]   # ts<=now: no in-play leak in backtests
+    params = [match_id, market] + [f"%{t}%" for t in tokens] + [f"% {suffix}"] \
+        + ([point] if point is not None else []) \
+        + [cutoff, now.isoformat()]   # ts<=now: no in-play leak in backtests
     rows = conn.execute(f"""
         SELECT book, fair_prob, divergence_pts, MAX(ts) ts FROM market_snapshots
-        WHERE match_id = ? AND market = ? AND {clause} AND ts >= ? AND ts <= ?
+        WHERE match_id = ? AND market = ? AND {clause}{pt_clause} AND ts >= ? AND ts <= ?
         GROUP BY book""", params).fetchall()
     weights = dict(BOOK_WEIGHTS)
     for b, w in THIN_MARKET_EXTRA_WEIGHTS.items():
@@ -933,6 +975,30 @@ def h_team_corners_atleast_half(m, g, conn, now):
     return p_geq(lam_t, k), tier, f"team corners(at-least) lam={lam_t:.2f} P(>={k})"
 
 
+def h_sot_atleast_half(m, g, conn, now):
+    """'Will X have at least N shot(s) on target in the <first|second> half?' —
+    the (at-least + half-scope + often SINGULAR 'shot') wording missed every
+    pricer's regex and fell to the flat placeholder 13 times for -42, the
+    entire half_other family leak (Kane/Diaz/Olmo 0.45 vs field ~0.55 YES).
+    TEAM subject -> the shared team-SOT pricer, half-scaled. PLAYER subject ->
+    the book's full-match player-SOT Over-0.5 line, Poisson-scaled to the half
+    (books quote no half-scoped player props). No book line -> None (family
+    placeholder, 0.25)."""
+    subj, k = g.group(1), int(g.group(2))
+    half = "h1" if g.group(3).lower() == "first" else "h2"
+    team = resolve_team(subj, m["home"], m["away"])
+    if team:
+        return _team_sot_price(m, team, k, half, conn, now)
+    p_full = _player_prob(conn, m["match_id"], "player_shots_on_target",
+                          subj, "Over", now, point=0.5)
+    if p_full is None:
+        return None
+    lam_full = -math.log(max(1e-9, 1.0 - min(p_full, 0.995)))
+    share = BASE["h2_sot_share"] if half == "h2" else 1 - BASE["h2_sot_share"]
+    p = p_geq(lam_full * share, k)
+    return p, "derived-mkt", f"player-SOT {half} from book O0.5={p_full:.2f}"
+
+
 def h_win_by_margin(m, g, conn, now):
     """'Will X win by N or more goals?' — Skellam margin on the market
     goal-lambdas (no goals-spread market exists on the tape). Was falling to
@@ -1021,6 +1087,8 @@ COVERAGE_HANDLERS = [
      h_either_offside_before_hydration),
     (r"card.*after the second hydration break", h_card_after_2nd_break),
     (r"card be shown in the first half", h_card_in_first_half),
+    (r"[Ww]ill (.+?) have at least (\d+) shots? on target in the "
+     r"(first|second) half", h_sot_atleast_half),
     (r"[Ww]ill (.+?) have (?:at least )?(\d+)(?: or more)? shots on target",
      h_team_sot_total),
     (r"(\d+) or more corner kicks be taken before the first hydration break",

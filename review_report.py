@@ -399,6 +399,39 @@ def _corner_sup_gain(mrows, conn, slope):
     return n, p0t, p1t
 
 
+def _ref_cards_gain(mrows, conn):
+    """WC_REF_CARDS gate: settled card-LEVEL questions on matches whose referee
+    is KNOWN (FBref schedule cache), re-priced via qmodel total-cards at
+    multiplier 1.0 vs the shrunk ref multiplier. Races excluded (ref cancels);
+    prior-only rates. n grows as the schedule cache backfills refs."""
+    import qmodel
+    import ref_rates
+    import team_rates
+    rates0 = {"_tournament": team_rates.build_rates().get("_tournament", {})}
+    n = 0
+    p0t = p1t = 0.0
+    for mid, meta, now, lam, rows in mrows:
+        ko = conn.execute("SELECT kickoff_utc FROM matches WHERE match_id=?",
+                          (mid,)).fetchone()
+        mult, ref = ref_rates.cards_multiplier(
+            meta["home"], meta["away"], ko["kickoff_utc"] if ko else "")
+        if not ref or mult == 1.0:
+            continue
+        rates1 = {**rates0, "_ref_cards": mult}
+        for r, qid, o, fab, mm in rows:
+            t = r["question"].lower()
+            if mm != "NO_MARKET" or "card" not in t or "than" in t:
+                continue
+            p0 = qmodel.price_question(r["question"], meta["home"], meta["away"], rates0, lam)
+            p1 = qmodel.price_question(r["question"], meta["home"], meta["away"], rates1, lam)
+            if not p0 or not p1:
+                continue
+            n += 1
+            p0t += _rel(p0[0], o, fab)
+            p1t += _rel(p1[0], o, fab)
+    return n, p0t, p1t
+
+
 def _alpha_family(text):
     """Coarse NO_MARKET families for the review table. Order matters: check
     score-or-assist BEFORE 'own goal' — every score-or-assist question contains
@@ -561,6 +594,11 @@ def build(conn) -> str:
     L.append(f"- **WC_CORNER_SUP_SLOPE** (corner-race supremacy fallback 0.20->"
              f"{scand:g}{', LIVE' if derive.CORNER_SUP_SLOPE != 0.20 else ', candidate'}): "
              f"at 0.20 {p0:+.0f} vs at {scand:g} {p1:+.0f} -> {_verdict(n, p1 - p0)}")
+    # WC_REF_CARDS: referee cards multiplier on non-book card-level lambdas
+    n, p0, p1 = _ref_cards_gain(mrows, conn)
+    L.append(f"- **WC_REF_CARDS** (referee cards multiplier, non-book tiers"
+             f"{', LIVE' if derive.REF_CARDS_ON else ', candidate'}): flat "
+             f"{p0:+.0f} vs ref-tilted {p1:+.0f} -> {_verdict(n, p1 - p0)}")
 
     # WC_KALSHI_HTOTAL: is the totals_half bucket beating the clone yet?
     th = edges.get("totals_half")

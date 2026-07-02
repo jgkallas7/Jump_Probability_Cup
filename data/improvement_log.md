@@ -428,3 +428,30 @@ Per-question attribution of the −90 → four concrete defects, all fixed tonig
 Also of note: the go-live's other two USA–Bosnia re-prices WON (hydration
 corners 73 vs field 60 YES +9; card-1H 71→67 saved +6) — the night's new-regime
 net was −18, all of it the total-shots miss. 118 tests pass.
+
+## 2026-07-02 (continued) — team rates confirmed, half-SOT cluster fixed, REFEREE feature built
+1. **HANDOFF #9 CLOSED — team-rate check.** evaluate_qmodel with 4-5 games of
+   rates: FULL-rates qmodel +825 vs clone +707 (prior-only +462) — per-team
+   counted rates now BEAT the field on the non-SOT buckets (fouls +134 vs +122,
+   offsides +306 vs +159; SOT still negative = what the split anchors fix).
+   "Team-rate edge grows as the tournament progresses" confirmed; WC_QMODEL
+   stays on, team-SOT stays disabled (qmodel +27 < sent +62 there).
+2. **half_other family diagnosed + fixed**: the −42 was ONE cluster — "at least
+   1 shot on target in the second half" (13 rows, all old 0.45 placeholders;
+   singular 'shot' + at-least + half-scope missed every regex). New
+   h_sot_atleast_half: team subjects -> shared team-SOT pricer (also fixed the
+   latent bug applying the H2 share to H1 questions); player subjects -> book
+   full-match SOT O0.5 line Poisson-scaled to the half. _player_prob gained a
+   `point` filter (laddered player markets returned an arbitrary line before).
+   Kalshi-priced corners checked: +7/n=4, no action.
+3. **HANDOFF #10 BUILT — WC_REF_CARDS (default OFF).** ref_rates.py joins the
+   FBref schedule's referee (CSV cache, nightly guarded refresh in review.sh)
+   to API-Football 2022-24 ref cards/match (392 refs, comp mean 2.78), shrunk
+   n/(n+6) + clamped [0.75,1.35]. Applies ONLY to bookless card-level tiers
+   (43/53 settled card-level rows priced without a cards line): cards_lambda
+   base fallback + qmodel counted total-cards via a "_ref_cards" rates key.
+   Races cancel the ref, derived tier is market-priced — both untouched.
+   FIRST GATE READING: flat +14 vs ref-tilted +37 = **+23 over n=6** (HOLD —
+   thin; 11/12 schedule refs matched). The FBref schedule only carries refs
+   for early matchdays; the nightly refresh backfills, the gate re-runs, flip
+   at n>=8 if it holds. 126 tests pass.

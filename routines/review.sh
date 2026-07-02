@@ -24,6 +24,9 @@ source "$REPO/routines/flags.sh"
   $PY parse_locked.py --backfill | tail -3
   # 3) settle + reliability (idempotent; morning also does this)
   $PY calibrate.py sync
+  # 3b) referee schedule backfill (WC_REF_CARDS data; FBref scrape is flaky —
+  # hard timeout + failure keeps the old cache, never blocks the review)
+  timeout 300 $PY -c "import ref_rates; print('ref rows:', ref_rates.refresh())" || true
   # 4) clean no-look-ahead OOS gate for the alpha pricer
   echo "----- OOS gate (evaluate_qmodel --prior-only) -----"
   $PY evaluate_qmodel.py --prior-only 2>&1 | head -20

@@ -192,7 +192,11 @@ def price_question(text, home, away, rates, lam):
                   r"( shown)?( in the second half| in the first half)?", t)
     if m:
         n = int(m.group(1))
-        lam_cards = _r(rates, home, "cards", 1.5) + _r(rates, away, "cards", 1.5)
+        # counted team card rates don't know the referee; derive stashes the
+        # shrunk ref multiplier under "_ref_cards" when WC_REF_CARDS is on
+        # (1.0 / absent otherwise — pure given inputs either way)
+        lam_cards = (_r(rates, home, "cards", 1.5) + _r(rates, away, "cards", 1.5)) \
+            * rates.get("_ref_cards", 1.0)
         half = _half_word(t)
         if half:
             s = qprice.H1_SHARE["cards"]

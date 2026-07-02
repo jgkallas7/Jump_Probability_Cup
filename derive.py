@@ -729,7 +729,7 @@ HANDLERS = [
     (r"Will (.+?) have (\d+) or more shots on target( in the second half)?",
      h_team_sot),
     (r"penalty kick be awarded OR a red card", h_pen_or_red),
-    (r"Will a penalty kick be awarded( in the match)?\?", h_pen),
+    (r"Will a penalty kick be awarded(?: in the match| in regulation.*)?\?", h_pen),
     (r"Will there be (\d+) or more total cards shown( in the second half)?",
      h_total_cards),
     (r"Will (.+?) receive at least (\d+) cards? in the second half",

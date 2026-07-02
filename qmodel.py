@@ -35,6 +35,12 @@ DOM_SLOPE = 0.5
 # symmetric behaviour we ship today. A human flips it after the OOS gate.
 FOUL_DOM_SLOPE = float(os.environ.get("WC_FOULS_DOM", "0") or 0)
 
+# cards follow tactical fouling, so the cards RACE gets the same underdog tilt
+# with its own slope (WC_CARDS_DOM, default 0 = symmetric counted price). The
+# race had NO pricer at all before 2026-07-02 (flat 0.42 placeholder; 21
+# settled, 62% YES). Gate in review_report sweeps the slope.
+CARD_DOM_SLOPE = float(os.environ.get("WC_CARDS_DOM", "0") or 0)
+
 # both-teams >=1 SOT in a HALF: the hand-set 0.68 anchor overshot — post-fix
 # submissions averaged 0.70 vs a 0.63 field on questions that settle YES ~65%
 # (h1 62% n=8, h2 67% n=9 in the outcomes table), realizing -26 over n=10.
@@ -60,15 +66,18 @@ def _dom(lam_team, lam_opp):
     return 1.0 + DOM_SLOPE * (share - 0.5) * 2  # share .5->1.0, .65->1.15
 
 
-def _foul_dom(lam_team, lam_opp):
+def _foul_dom(lam_team, lam_opp, slope=None):
     """foul-volume multiplier from goal-rate dominance, INVERSE of _dom(): the
     underdog (goal-share < 0.5) fouls MORE, the favorite fouls LESS. Centered at
-    1.0; slope = WC_FOULS_DOM (0.0 -> flat 1.0, i.e. current symmetric prices)."""
+    1.0; slope = WC_FOULS_DOM (0.0 -> flat 1.0, i.e. current symmetric prices).
+    The cards race reuses it at its own CARD_DOM_SLOPE."""
+    if slope is None:
+        slope = FOUL_DOM_SLOPE
     tot = (lam_team or 0) + (lam_opp or 0)
     if tot <= 0:
         return 1.0
     share = lam_team / tot
-    return 1.0 + FOUL_DOM_SLOPE * (0.5 - share) * 2  # underdog .35->1+0.3*slope
+    return 1.0 + slope * (0.5 - share) * 2  # underdog .35->1+0.3*slope
 
 
 def _half_word(text):
@@ -98,7 +107,13 @@ def price_question(text, home, away, rates, lam):
     # --- fouls race: counted foul rates, tilted by game-state (underdog fouls
     # more), -> Skellam. The tilt (_foul_dom) is the fix for the -128 leak; with
     # WC_FOULS_DOM=0 it's a no-op and this is the old symmetric counted price. ---
-    m = re.search(r"Will (.+?) commit more fouls than (.+?)\?", t)
+    # optional KO suffix: 'than Brazil in regulation (90 minutes + stoppage
+    # time)?' — without it the lazy group swallowed the suffix into the team
+    # name, resolve_team failed, and the branch (with its live WC_FOULS_DOM
+    # tilt) silently never fired on knockout wording (caught 2026-07-02
+    # BEFORE any KO fouls race was asked).
+    m = re.search(r"Will (.+?) commit more fouls than (.+?)"
+                  r"(?:\s+in regulation.*)?\?", t)
     if m:
         a = resolve_team(m.group(1), home, away)
         b = resolve_team(m.group(2), home, away)
@@ -111,6 +126,25 @@ def price_question(text, home, away, rates, lam):
         rb *= _foul_dom(lb, la)
         return (qprice.clip(qprice.prob_a_more_than_b(ra, rb)),
                 f"fouls race Skellam {ra:.1f} vs {rb:.1f}")
+
+    # --- cards race: counted team card rates, underdog-tilted like fouls
+    # (cards track tactical fouling) -> Skellam. Had NO pricer before
+    # 2026-07-02 — fell to the flat 0.42 placeholder. Slope 0 = symmetric
+    # counted price; WC_CARDS_DOM tilts (gate in review_report). ---
+    m = re.search(r"Will (.+?) receive more cards than (.+?)"
+                  r"(?:\s+in regulation.*)?\?", t)
+    if m:
+        a = resolve_team(m.group(1), home, away)
+        b = resolve_team(m.group(2), home, away)
+        if not a or not b:
+            return None
+        ra, rb = _r(rates, a, "cards", 1.9), _r(rates, b, "cards", 1.9)
+        la = lam_h if a == home else lam_a
+        lb = lam_h if b == home else lam_a
+        ra *= _foul_dom(la, lb, CARD_DOM_SLOPE)
+        rb *= _foul_dom(lb, la, CARD_DOM_SLOPE)
+        return (qprice.clip(qprice.prob_a_more_than_b(ra, rb)),
+                f"cards race Skellam {ra:.2f} vs {rb:.2f}")
 
     # --- total shots on target: sum of counted SOT rates, opp-scaled, half ---
     m = re.search(r"Will there be (\d+) or more total shots on target"
@@ -211,8 +245,8 @@ def price_question(text, home, away, rates, lam):
         return (qprice.clip(qprice.prob_penalty_or_red(pen, red)),
                 f"pen|red counted pen={pen:.2f} red={red:.2f}")
 
-    # --- penalty awarded in match: counted PK rate ---
-    if re.search(r"Will a penalty kick be awarded( in the match)?\?", t):
+    # --- penalty awarded in match: counted PK rate (KO suffix tolerated) ---
+    if re.search(r"Will a penalty kick be awarded(?: in the match| in regulation.*)?\?", t):
         pen = (_r(rates, home, "pk_won", 0.18) + _r(rates, away, "pk_won", 0.18))
         return (qprice.clip(1 - qprice.np.exp(-pen)), f"penalty counted lam={pen:.2f}")
 

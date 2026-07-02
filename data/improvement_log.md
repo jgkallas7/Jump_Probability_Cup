@@ -471,3 +471,28 @@ MORNING, but the book cards line usually arrives by close and sentinel
 re-prices from it, so the ref multiplier's scored surface is mainly qmodel
 total-cards. The sensitivity check catching a phantom APPROVE before a live
 flip is the audit discipline working as designed.
+
+## 2026-07-02 — auto review (review_report.py)
+Realized edge vs consensus clone: -566. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-02.md`.
+
+## 2026-07-02 (cards deep-dive, ~06:00Z) — "are opponents/team rates in the cards pricing?"
+Audit of every card/foul pricing path, prompted by the user's question:
+- TEAM rates: YES where it matters — qmodel total-cards sums both teams'
+  counted card rates (now x ref multiplier when WC_REF_CARDS flips); the fouls
+  race uses counted foul rates + the live WC_FOULS_DOM underdog tilt.
+- OPPONENT/game-state: the fouls race has it (the tilt); the cards RACE turned
+  out to be classifier-routed to the BOOK cards-spread market
+  (alternate_spreads_cards) — opponent-aware via the book, but that bucket is
+  the worst book loser (edge −57/n=21; thin, vigged market).
+- FIXED (real, latent): qmodel's fouls-race and penalty regexes died on the
+  KO "in regulation (90 minutes + stoppage time)?" suffix — the fouls tilt
+  (our biggest validated gain) would have silently never fired on R16+ slates
+  (0 KO fouls races asked yet, so nothing lost). Cards-race branch added to
+  qmodel (counted rates + WC_CARDS_DOM tilt, default 0) — currently inert for
+  book-mapped races, insurance for wording drift + the no-spread placeholder path.
+- INVESTIGATED, NOT SHIPPED (failed drop-3-best): shrinking the cards-spread
+  book price (+29 -> −2 without its 3 best rows) and team_totals (+21 -> −1);
+  counted+tilt re-pricing of the cards race is monotone-to-grid-edge (+41 at
+  0.45, no interior peak). All three are blowup-concentrated mirages by the
+  discipline; candidate gate lines added to the nightly review to accumulate
+  evidence instead. 129 tests pass.

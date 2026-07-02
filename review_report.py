@@ -399,6 +399,38 @@ def _corner_sup_gain(mrows, conn, slope):
     return n, p0t, p1t
 
 
+def _cards_dom_gain(mrows, conn, slope):
+    """WC_CARDS_DOM gate: cards-race questions re-priced via the new qmodel
+    branch at slope 0 (symmetric counted) vs `slope`. Prior-only rates, pre-
+    kickoff lambdas — the tilt is the entire signal, same design as the fouls
+    gate. Also reports how the symmetric price compares to the flat 0.42
+    placeholder these questions actually got."""
+    import qmodel
+    import team_rates
+    rates = {"_tournament": team_rates.build_rates().get("_tournament", {})}
+    n = 0
+    p0t = p1t = 0.0
+    old = qmodel.CARD_DOM_SLOPE
+    try:
+        for mid, meta, now, lam, rows in mrows:
+            for r, qid, o, fab, mm in rows:
+                if (mm != "NO_MARKET"
+                        or "receive more cards than" not in r["question"].lower()):
+                    continue
+                qmodel.CARD_DOM_SLOPE = 0.0
+                p0 = qmodel.price_question(r["question"], meta["home"], meta["away"], rates, lam)
+                qmodel.CARD_DOM_SLOPE = slope
+                p1 = qmodel.price_question(r["question"], meta["home"], meta["away"], rates, lam)
+                if not p0 or not p1:
+                    continue
+                n += 1
+                p0t += _rel(p0[0], o, fab)
+                p1t += _rel(p1[0], o, fab)
+    finally:
+        qmodel.CARD_DOM_SLOPE = old
+    return n, p0t, p1t
+
+
 def _ref_cards_gain(mrows, conn):
     """WC_REF_CARDS gate: settled card-LEVEL questions on matches whose referee
     is KNOWN (FBref schedule cache), re-priced at multiplier 1.0 vs the shrunk
@@ -627,12 +659,31 @@ def build(conn) -> str:
     L.append(f"- **WC_CORNER_SUP_SLOPE** (corner-race supremacy fallback 0.20->"
              f"{scand:g}{', LIVE' if derive.CORNER_SUP_SLOPE != 0.20 else ', candidate'}): "
              f"at 0.20 {p0:+.0f} vs at {scand:g} {p1:+.0f} -> {_verdict(n, p1 - p0)}")
+    # WC_CARDS_DOM: cards-race underdog tilt (fouls-race twin)
+    ccand = qmodel.CARD_DOM_SLOPE if qmodel.CARD_DOM_SLOPE else 0.15
+    n, p0, p1 = _cards_dom_gain(mrows, conn, ccand)
+    L.append(f"- **WC_CARDS_DOM** (cards-race underdog tilt slope={ccand:g}"
+             f"{', LIVE' if qmodel.CARD_DOM_SLOPE else ', candidate'}): symmetric "
+             f"{p0:+.0f} vs tilted {p1:+.0f} -> {_verdict(n, p1 - p0)}")
     # WC_REF_CARDS: referee cards multiplier on non-book card-level lambdas
     n, p0, p1 = _ref_cards_gain(mrows, conn)
     L.append(f"- **WC_REF_CARDS** (referee cards multiplier, non-book tiers"
              f"{', LIVE' if derive.REF_CARDS_ON else ', candidate'}): flat "
              f"{p0:+.0f} vs ref-tilted {p1:+.0f} -> {_verdict(n, p1 - p0)}")
 
+    # Candidate shrinks for the thin-book losers (2026-07-02 diagnosis: the
+    # cards-spread book is near-uninformative — shrink monotone to beta 1.0 —
+    # and team_totals shows the same overconfidence shape; BOTH failed the
+    # drop-3-best sensitivity check (+29->-2, +21->-1), so they stay OFF and
+    # these lines just accumulate evidence nightly. Flip only if the gain
+    # broadens beyond a few blowup rows.)
+    n, sent, shrunk = _shrink_gain(recs, {"alternate_spreads_cards"}, 0.5)
+    L.append(f"- **cards-spread shrink** (beta=0.5, candidate, CONCENTRATED — see "
+             f"drop-3 note): sent {sent:+.0f} vs shrunk {shrunk:+.0f} -> "
+             f"{_verdict(n, shrunk - sent)}")
+    n, sent, shrunk = _shrink_gain(recs, {"team_totals"}, 0.5)
+    L.append(f"- **team_totals shrink** (beta=0.5, candidate, CONCENTRATED): sent "
+             f"{sent:+.0f} vs shrunk {shrunk:+.0f} -> {_verdict(n, shrunk - sent)}")
     # WC_KALSHI_HTOTAL: is the totals_half bucket beating the clone yet?
     th = edges.get("totals_half")
     if th:

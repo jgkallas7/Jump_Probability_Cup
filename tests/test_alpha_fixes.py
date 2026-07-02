@@ -387,3 +387,43 @@ def test_player_sot_half_no_book_line_falls_through():
     res = _coverage_price(conn, "Will Eldor Shomurodov have at least 1 shot "
                           "on target in the second half?", now)
     assert res is None       # -> family placeholder (0.25), not a crash
+
+
+# ---- KO-wording regex fixes + the cards-race branch (2026-07-02) ----
+
+KO_FOULS_Q = ("Will Japan commit more fouls than Brazil in regulation "
+              "(90 minutes + stoppage time)?")
+
+
+def test_fouls_race_prices_ko_wording(monkeypatch):
+    # the lazy (.+?)\? used to swallow ' in regulation (...)' into the team
+    # name, silently bypassing the live WC_FOULS_DOM tilt on knockout slates
+    monkeypatch.setattr(qmodel, "FOUL_DOM_SLOPE", 0.15)
+    res = qmodel.price_question(KO_FOULS_Q, "Brazil", "Japan",
+                                {"_tournament": {"fouls": 13.0}}, (1.8, 0.9, 2.7))
+    assert res is not None and "fouls race" in res[1]
+    assert res[0] > 0.5          # Japan is the underdog -> tilted above 0.5
+
+
+def test_cards_race_branch_and_tilt(monkeypatch):
+    rates = {"_tournament": {"cards": 1.9}}
+    lam = (1.8, 0.9, 2.7)
+    q = "Will Japan receive more cards than Brazil in regulation (90 minutes + stoppage time)?"
+    monkeypatch.setattr(qmodel, "CARD_DOM_SLOPE", 0.0)
+    p_sym = qmodel.price_question(q, "Brazil", "Japan", rates, lam)[0]
+    monkeypatch.setattr(qmodel, "CARD_DOM_SLOPE", 0.30)
+    p_tilt = qmodel.price_question(q, "Brazil", "Japan", rates, lam)[0]
+    assert 0.35 < p_sym < 0.50   # symmetric Skellam tie-split
+    assert p_tilt > p_sym        # underdog tilted up
+    # fouls slope must NOT leak into the cards race
+    monkeypatch.setattr(qmodel, "CARD_DOM_SLOPE", 0.0)
+    monkeypatch.setattr(qmodel, "FOUL_DOM_SLOPE", 0.45)
+    assert abs(qmodel.price_question(q, "Brazil", "Japan", rates, lam)[0] - p_sym) < 1e-12
+
+
+def test_pen_regex_tolerates_ko_suffix():
+    rates = {"_tournament": {}}
+    res = qmodel.price_question(
+        "Will a penalty kick be awarded in regulation (90 minutes + stoppage time)?",
+        "Brazil", "Japan", rates, (1.3, 1.3, 2.6))
+    assert res is not None and "penalty counted" in res[1]

@@ -401,34 +401,67 @@ def _corner_sup_gain(mrows, conn, slope):
 
 def _ref_cards_gain(mrows, conn):
     """WC_REF_CARDS gate: settled card-LEVEL questions on matches whose referee
-    is KNOWN (FBref schedule cache), re-priced via qmodel total-cards at
-    multiplier 1.0 vs the shrunk ref multiplier. Races excluded (ref cancels);
-    prior-only rates. n grows as the schedule cache backfills refs."""
+    is KNOWN (FBref schedule cache), re-priced at multiplier 1.0 vs the shrunk
+    ref multiplier — via qmodel total-cards AND the derive card handlers whose
+    base-tier lambda consumes the multiplier. Races excluded (ref cancels);
+    prior-only rates. n counts ONLY rows the multiplier actually moves — the
+    first version counted every card row incl. pen|red branches the multiplier
+    never touches, inflating n 27 vs an effective 3 (caught by the drop-3
+    sensitivity check before the flag flipped on a phantom APPROVE)."""
+    import re as _re
+    import derive
     import qmodel
     import ref_rates
     import team_rates
     rates0 = {"_tournament": team_rates.build_rates().get("_tournament", {})}
+
+    def derive_card_price(m, text, now):
+        for pattern, fn in derive.HANDLERS + derive.COVERAGE_HANDLERS:
+            if fn is None or "card" not in pattern:
+                continue
+            g = _re.search(pattern, text)
+            if g:
+                return fn(m, g, conn, now)
+        return None
+
     n = 0
     p0t = p1t = 0.0
-    for mid, meta, now, lam, rows in mrows:
-        ko = conn.execute("SELECT kickoff_utc FROM matches WHERE match_id=?",
-                          (mid,)).fetchone()
-        mult, ref = ref_rates.cards_multiplier(
-            meta["home"], meta["away"], ko["kickoff_utc"] if ko else "")
-        if not ref or mult == 1.0:
-            continue
-        rates1 = {**rates0, "_ref_cards": mult}
-        for r, qid, o, fab, mm in rows:
-            t = r["question"].lower()
-            if mm != "NO_MARKET" or "card" not in t or "than" in t:
+    old_on, old_mult = derive.REF_CARDS_ON, dict(derive._REF_MULT)
+    try:
+        for mid, meta, now, lam, rows in mrows:
+            ko = conn.execute("SELECT kickoff_utc FROM matches WHERE match_id=?",
+                              (mid,)).fetchone()
+            mult, ref = ref_rates.cards_multiplier(
+                meta["home"], meta["away"], ko["kickoff_utc"] if ko else "")
+            if not ref or mult == 1.0 or now is None:
                 continue
-            p0 = qmodel.price_question(r["question"], meta["home"], meta["away"], rates0, lam)
-            p1 = qmodel.price_question(r["question"], meta["home"], meta["away"], rates1, lam)
-            if not p0 or not p1:
-                continue
-            n += 1
-            p0t += _rel(p0[0], o, fab)
-            p1t += _rel(p1[0], o, fab)
+            m = {"match_id": mid, "home": meta["home"], "away": meta["away"]}
+            rates1 = {**rates0, "_ref_cards": mult}
+            for r, qid, o, fab, mm in rows:
+                t = r["question"].lower()
+                if mm != "NO_MARKET" or "card" not in t or "than" in t:
+                    continue
+                p0 = qmodel.price_question(r["question"], meta["home"], meta["away"], rates0, lam)
+                p1 = qmodel.price_question(r["question"], meta["home"], meta["away"], rates1, lam)
+                if not (p0 and p1):
+                    derive.REF_CARDS_ON = False
+                    derive._REF_MULT.clear()
+                    r0 = derive_card_price(m, r["question"], now)
+                    derive.REF_CARDS_ON = True
+                    derive._REF_MULT.clear()
+                    derive._REF_MULT[mid] = (mult, ref)
+                    r1 = derive_card_price(m, r["question"], now)
+                    p0 = (r0[0],) if r0 else None
+                    p1 = (r1[0],) if r1 else None
+                if not (p0 and p1) or abs(p0[0] - p1[0]) < 1e-9:
+                    continue                       # multiplier never reached it
+                n += 1
+                p0t += _rel(p0[0], o, fab)
+                p1t += _rel(p1[0], o, fab)
+    finally:
+        derive.REF_CARDS_ON = old_on
+        derive._REF_MULT.clear()
+        derive._REF_MULT.update(old_mult)
     return n, p0t, p1t
 
 

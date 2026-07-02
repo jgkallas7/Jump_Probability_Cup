@@ -455,3 +455,19 @@ net was −18, all of it the total-shots miss. 118 tests pass.
    thin; 11/12 schedule refs matched). The FBref schedule only carries refs
    for early matchdays; the nightly refresh backfills, the gate re-runs, flip
    at n>=8 if it holds. 126 tests pass.
+
+## 2026-07-02 (correction, ~05:00Z) — WC_REF_CARDS gate had a phantom APPROVE; fixed, verdict HOLD
+The fresh FBref scrape landed (79/91 matches with refs, 72 matched to
+tendencies) and the gate printed APPROVE +22/n=27 — but the drop-3-best
+sensitivity check (run BEFORE flipping, per the new discipline) showed 24 of
+the 27 rows had gain exactly 0: they were pen|red and other card questions
+priced by qmodel branches the multiplier never touches. Effective n=3, all of
++22 in 2 rows. Gate fixed to count only rows the multiplier actually moves
+(and to also re-price the derive base-tier card handlers). HONEST verdict:
+**HOLD (thin n=3)** — WC_REF_CARDS stays OFF; the gate re-runs nightly as KO
+matches settle. Structural note: the scored surface is smaller than the
+"43/53 bookless" audit suggested — those rows were priced bookless in the
+MORNING, but the book cards line usually arrives by close and sentinel
+re-prices from it, so the ref multiplier's scored surface is mainly qmodel
+total-cards. The sensitivity check catching a phantom APPROVE before a live
+flip is the audit discipline working as designed.

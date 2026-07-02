@@ -104,6 +104,17 @@ def price_question(text, home, away, rates, lam):
         return (qprice.clip(qprice.prob_n_or_more(rate, n)),
                 f"offsides counted lam={rate:.2f} P(>={n})")
 
+    # --- TOTAL match offsides ('N or more offside calls') — the KO-slate
+    # wording variant of the team form above; had no branch and fell to the
+    # 0.35 placeholder (England 3+ resolved YES vs field 0.56, -23). Sum of
+    # both teams' counted rates -> Poisson survival. ---
+    m = re.search(r"Will there be (\d+) or more offside", t)
+    if m:
+        n = int(m.group(1))
+        lam_off = _r(rates, home, "offsides", 1.3) + _r(rates, away, "offsides", 1.3)
+        return (qprice.clip(qprice.prob_n_or_more(lam_off, n)),
+                f"total offsides counted lam={lam_off:.2f} P(>={n})")
+
     # --- fouls race: counted foul rates, tilted by game-state (underdog fouls
     # more), -> Skellam. The tilt (_foul_dom) is the fix for the -128 leak; with
     # WC_FOULS_DOM=0 it's a no-op and this is the old symmetric counted price. ---

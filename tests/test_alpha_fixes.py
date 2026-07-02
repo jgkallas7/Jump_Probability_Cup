@@ -427,3 +427,17 @@ def test_pen_regex_tolerates_ko_suffix():
         "Will a penalty kick be awarded in regulation (90 minutes + stoppage time)?",
         "Brazil", "Japan", rates, (1.3, 1.3, 2.6))
     assert res is not None and "penalty counted" in res[1]
+
+
+def test_total_offside_calls_branch():
+    # 'N or more offside calls' (total-match) had no branch -> 0.35 flat
+    rates = {"_tournament": {"offsides": 1.6}}
+    res = qmodel.price_question(
+        "Will there be 4 or more offside calls in regulation (90 minutes + "
+        "stoppage time)?", "Spain", "Austria", rates, (1.8, 0.9, 2.7))
+    assert res is not None and "total offsides" in res[1]
+    assert 0.25 < res[0] < 0.55          # lam=3.2 -> P(>=4) ~ 0.40
+    # the per-team form still routes to the team branch
+    res2 = qmodel.price_question("Will Spain be caught offside 2 or more times?",
+                                 "Spain", "Austria", rates, (1.8, 0.9, 2.7))
+    assert "offsides counted" in res2[1]

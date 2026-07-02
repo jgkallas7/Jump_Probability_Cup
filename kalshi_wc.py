@@ -18,6 +18,7 @@ it as an exfiltration target for the self-improvement agent.
 from __future__ import annotations
 
 import base64
+import os
 import sys
 import time
 from datetime import datetime
@@ -78,8 +79,8 @@ class KalshiRO:
         self._mk_cache[series] = out
         return out
 
-    def mid(self, ticker: str) -> float | None:
-        """Orderbook mid as a probability in [0,1], or None if no book.
+    def sides(self, ticker: str) -> tuple[float | None, float | None]:
+        """(yes_bid, yes_ask) in prob units, None where that side is empty.
 
         Handles V3 (orderbook_fp: yes_dollars/no_dollars, prices as $ strings)
         and V2 (orderbook: yes/no, prices in cents). yes_ask = 1 - best_no_bid
@@ -91,16 +92,29 @@ class KalshiRO:
             no = [(float(p), float(q)) for p, q in (book.get("no_dollars") or [])]
             yes_bid = max((p for p, _ in yes), default=None)
             no_bid = max((p for p, _ in no), default=None)
-            yes_ask = (1.0 - no_bid) if no_bid is not None else None
         else:
             ob = d.get("orderbook", d)
             yes = ob.get("yes") or []
             no = ob.get("no") or []
             yes_bid = (max(l[0] for l in yes) / 100.0) if yes else None
             no_bid = (max(l[0] for l in no) / 100.0) if no else None
-            yes_ask = (1.0 - no_bid) if no_bid is not None else None
+        yes_ask = (1.0 - no_bid) if no_bid is not None else None
+        return yes_bid, yes_ask
+
+    def mid(self, ticker: str, max_spread: float | None = None) -> float | None:
+        """Orderbook mid as a probability in [0,1], or None if no book.
+
+        max_spread: when set, a book wider than this returns None — a wide
+        book's mid is an artifact of symmetric emptiness, not a probability
+        (the 2026-07-01 score-or-assist lesson: bid 0.10/ask 0.80 -> 'mid
+        0.45' priced questions that resolved YES 20%)."""
+        yes_bid, yes_ask = self.sides(ticker)
         if yes_bid is not None and yes_ask is not None:
+            if max_spread is not None and (yes_ask - yes_bid) > max_spread:
+                return None
             return (yes_bid + yes_ask) / 2
+        if max_spread is not None:
+            return None                      # one-sided book: spread unknowable
         return yes_bid if yes_bid is not None else yes_ask
 
 
@@ -180,8 +194,15 @@ def _norm_name(s: str) -> str:
     return _re.sub(r"[^a-z]", "", s.lower())
 
 
+# SOA books are tight on stars (~1-4c) and junk-wide on longshots (15c+); a
+# tight exchange book is a real crowd probability (arguably the best fair for
+# this one-sided-at-the-bookies family), a wide one priced -40/n=5 realized.
+SOA_MAX_SPREAD = float(os.environ.get("WC_KALSHI_SOA_MAXSPREAD", "0") or 0) or None
+
+
 def score_or_assist(client: KalshiRO, home, away, date) -> dict[str, float]:
-    """{normalized player name: P(score or assist)} from KXWCSOA mids."""
+    """{normalized player name: P(score or assist)} from KXWCSOA mids.
+    Books wider than SOA_MAX_SPREAD are dropped (mid is meaningless there)."""
     codes = match_code(home, away, date)
     out = {}
     for m in client.markets("KXWCSOA"):
@@ -189,7 +210,7 @@ def score_or_assist(client: KalshiRO, home, away, date) -> dict[str, float]:
             name = (m.get("yes_sub_title") or m.get("title") or "").split(":")[0]
             key = _norm_name(name)
             if key:
-                p = client.mid(m["ticker"])
+                p = client.mid(m["ticker"], max_spread=SOA_MAX_SPREAD)
                 if p is not None:
                     out[key] = round(p, 4)
     return out

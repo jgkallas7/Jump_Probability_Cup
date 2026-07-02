@@ -47,13 +47,21 @@ _KALSHI_CLIENT = None
 _KALSHI_BOOK: dict[str, dict] = {}
 
 # Kalshi score-or-assist mids come from THIN player-prop orderbooks and mid()
-# has no spread guard — a wide book (bid 0.10 / ask 0.80) pins the mid near 0.5
+# had no spread guard — a wide book (bid 0.10 / ask 0.80) pins the mid near 0.5
 # regardless of truth. Realized (2026-07-01): kalshi-priced SOA edge -40 over
 # n=5 settled rows, avg sent 0.49 on questions resolving YES 20%; the book-union
 # h_score_or_assist tracked the field (-5 over n=6). WC_KALSHI_NO_SOA=1 skips
 # Kalshi for the score-or-assist family so it falls through to the book union.
-# Default OFF = today's routing. A human flips it (review_report gate).
+# REFINEMENT (2026-07-02, user's point): Kalshi SOA is a TWO-SIDED exchange
+# book — where it's tight (stars ~1-4c) its mid is a real crowd probability,
+# arguably the best fair for a family the sportsbooks only quote one-sided.
+# WC_KALSHI_SOA_MAXSPREAD (e.g. 0.08), when set, re-admits Kalshi SOA books
+# tighter than the threshold (kalshi_wc drops the wide ones); the blanket ban
+# then covers only the unset case. Unset by default — no historical spreads
+# were stored, so validation is FORWARD-only (watch the score_or_assist family
+# row after any flip).
 KALSHI_NO_SOA = os.environ.get("WC_KALSHI_NO_SOA", "") == "1"
+KALSHI_SOA_MAXSPREAD = float(os.environ.get("WC_KALSHI_SOA_MAXSPREAD", "0") or 0) or None
 
 # SOT-threshold base anchor (OFF by default, WC_SOT_THRESH_ANCHOR). Our raw
 # counted-rate Poisson survival systematically UNDER-prices "N-or-more shots on
@@ -233,8 +241,11 @@ def _kalshi_price(conn, m, text):
     """Try a live Kalshi mid for this question. Fully guarded — any failure
     (auth, network, no market) returns None and the pipeline proceeds."""
     global _KALSHI_CLIENT
-    if KALSHI_NO_SOA and "score or assist" in text.lower():
-        return None   # thin-book mids mislead here; use the book union instead
+    # thin-book mids mislead on SOA; with WC_KALSHI_SOA_MAXSPREAD set, tight
+    # books pass through instead (kalshi_wc drops the wide ones itself)
+    if KALSHI_NO_SOA and KALSHI_SOA_MAXSPREAD is None \
+            and "score or assist" in text.lower():
+        return None
     try:
         import kalshi_wc
         if _KALSHI_CLIENT is None:

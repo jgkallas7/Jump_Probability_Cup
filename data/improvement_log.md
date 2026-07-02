@@ -496,3 +496,18 @@ Audit of every card/foul pricing path, prompted by the user's question:
   0.45, no interior peak). All three are blowup-concentrated mirages by the
   discipline; candidate gate lines added to the nightly review to accumulate
   evidence instead. 129 tests pass.
+
+## 2026-07-02 (Kalshi SOA refinement) — the blanket ban was too blunt (user's catch)
+User: "doesn't Kalshi have those props too?" — yes, and it's a TWO-SIDED
+exchange book, unlike the sportsbooks' one-sided SOA quotes (flat 0.93/0.90
+haircut ≈ not real devig; family settles 26% vs our ~0.31 fairs, longshot vig
+under-removed). Tonight's scan: star books are 1-4c tight (real crowd prices —
+arguably our best SOA fair), longshot books 15c+ wide (the thin-mid artifact
+that lost -40). So the correct rule is SPREAD-AWARE, not a blanket ban:
+kalshi_wc.mid() gained a max_spread guard (+ sides() exposing bid/ask);
+WC_KALSHI_SOA_MAXSPREAD re-admits tight books when set. UNSET pending
+forward-only validation (spreads were never stored — no backtest exists).
+Trading answer for Spain-Austria stayed: tight books = the fair (nothing to
+trade), wide books = untradeable spread; the one real edge was NO on total
+corners 9+ (Kalshi 0.59 vs two-sided-devigged fair 0.48, realized base 38%).
+134 tests pass.

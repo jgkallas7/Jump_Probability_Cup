@@ -175,3 +175,13 @@ export WC_TO_ADVANCE_H2H=1
 # these settle, and the coverage bucket in parse_locked — flip OFF if it regresses (esp.
 # ahead-HT, which moves AWAY from the crowd toward the sharp h1 market). 66/66 tests pass.
 export WC_PH_COVERAGE=1
+# Spread-aware Kalshi SOA (2026-07-02, refines WC_KALSHI_NO_SOA): Kalshi SOA is
+# a TWO-SIDED exchange book — tight books (stars, ~1-4c) are a real crowd
+# probability, arguably the best fair for a family sportsbooks only quote
+# one-sided; only the WIDE books (longshots, 15c+) produced the -40 thin-mid
+# loss. Setting WC_KALSHI_SOA_MAXSPREAD (e.g. 0.08) re-admits books tighter
+# than the threshold; wide ones stay banned. UNSET for now: historical spreads
+# were never stored so there is NO backtest — validation is forward-only
+# (flip it, then watch the score_or_assist family row for a week; revert on
+# regression).
+# export WC_KALSHI_SOA_MAXSPREAD=0.08

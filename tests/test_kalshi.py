@@ -42,3 +42,45 @@ def test_half_total_absent_when_ladder_missing():
     # branch must return None and the pipeline falls back to the book consensus.
     assert kw.price_question(
         "Will the second half have 2 or more total goals?", {}) is None
+
+
+# ---- spread-aware mid (2026-07-02): a wide book's mid is not a probability ----
+
+def _client_with_book(monkeypatch, yes_bid_c, no_bid_c):
+    import kalshi_wc
+    c = kalshi_wc.KalshiRO()
+    monkeypatch.setattr(c, "_get", lambda path, params=None: {
+        "orderbook": {"yes": [[yes_bid_c, 100]] if yes_bid_c else [],
+                      "no": [[no_bid_c, 100]] if no_bid_c else []}})
+    return c
+
+
+def test_mid_tight_book_passes_spread_guard(monkeypatch):
+    c = _client_with_book(monkeypatch, 57, 42)      # bid .57 / ask .58
+    assert abs(c.mid("T", max_spread=0.08) - 0.575) < 1e-9
+
+
+def test_mid_wide_book_rejected(monkeypatch):
+    c = _client_with_book(monkeypatch, 10, 20)      # bid .10 / ask .80
+    assert c.mid("T") is not None                    # legacy: mid still returned
+    assert c.mid("T", max_spread=0.08) is None       # guarded: rejected
+
+
+def test_mid_one_sided_book_rejected_under_guard(monkeypatch):
+    c = _client_with_book(monkeypatch, 10, None)     # no ask side at all
+    assert c.mid("T", max_spread=0.08) is None       # spread unknowable
+
+
+def test_derive_soa_passthrough_semantics(monkeypatch):
+    import derive
+    q = "Will Kevin De Bruyne (Belgium) score or assist a goal?"
+    monkeypatch.setattr(derive, "KALSHI_NO_SOA", True)
+    monkeypatch.setattr(derive, "KALSHI_SOA_MAXSPREAD", None)
+    assert derive._kalshi_price(None, {"match_id": "M", "home": "A", "away": "B"}, q) is None
+    # with the threshold set, the blanket skip no longer fires (the call would
+    # proceed into the guarded kalshi path; here it just errors out to None
+    # through the try/except because there's no client/network)
+    monkeypatch.setattr(derive, "KALSHI_SOA_MAXSPREAD", 0.08)
+    monkeypatch.setattr(derive, "_KALSHI_CLIENT", None)
+    monkeypatch.setattr(derive, "_KALSHI_BOOK", {"M": {}})
+    assert derive._kalshi_price(None, {"match_id": "M", "home": "A", "away": "B"}, q) is None

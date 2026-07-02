@@ -250,7 +250,7 @@ def test_total_shots_threshold_aware():
     p18, p20, p25, p30 = price(18), price(20), price(25), price(30)
     assert p18 > p20 > p25 > p30            # monotone in the line
     assert 0.70 < p20 < 0.88                # ~0.78 at a neutral goal line
-    assert p30 < 0.25                       # '30 or more' is no longer 0.58
+    assert p30 < 0.30                       # '30 or more' is no longer 0.58
 
 
 # ---- placeholder ordering: both-teams-card beats the generic cards rule ----
@@ -286,3 +286,66 @@ def test_team_sot_wordings_price_identically():
     p1 = derive.h_team_sot(M, g1, conn, now)[0]
     p2 = derive.h_team_sot_total(M, g2, conn, now)[0]
     assert abs(p1 - p2) < 1e-12   # was 0.232 vs 0.028 by wording
+
+
+# ---- 2026-07-02 post-mortem fixes (first new-regime match night) ----
+
+def test_win_by_margin_coverage():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    _snap(conn, "totals", "Under", 2.5, 0.40)          # lam_tot ~2.9
+    _snap(conn, "h2h", "Belgium", None, 0.65)          # clear favourite
+    res = _coverage_price(conn, "Will Belgium win by 2 or more goals in "
+                          "regulation (90 minutes + stoppage time)?", now)
+    assert res is not None
+    p, tier, reason = res
+    assert "win-by>=2" in reason
+    assert 0.15 < p < 0.45          # favourite's 2+ margin, NOT a flat 0.35
+    res_dog = _coverage_price(conn, "Will Japan win by 2 or more goals in "
+                              "regulation?", now)
+    # unknown team resolves None -> falls through (no crash)
+    assert res_dog is None or res_dog[0] < p
+
+
+def test_total_shots_sublinear_and_wide():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    # high goal line (lam ~3.0): '22 or more' must NOT price near 0.87 again
+    _snap(conn, "totals", "Under", 2.5, 0.35)
+    g = re.search(r"(\d+) or more total shots",
+                  "Will there be 22 or more total shots (on and off target)?")
+    p = derive.h_total_shots_match(M, g, conn, now)[0]
+    assert p < 0.80                 # was 0.87 on 2026-07-01, lost -43 vs field 57
+
+
+def test_substitute_scorer_classifies_no_market():
+    from ingest_questions import classify
+    qt, mapping = classify("Will a substitute score a goal (excluding own "
+                           "goals) in regulation (90 minutes + stoppage time)?")
+    assert mapping == "NO_MARKET"
+    # real player scorer questions still map to the book market
+    qt, mapping = classify("Will Harry Kane score a goal (excluding own goals) "
+                           "in regulation?")
+    assert mapping == "player_goal_scorer_anytime"
+
+
+def test_team_scorer_maps_to_team_totals():
+    from forecast import map_question
+    mkt = map_question("Will DR Congo score a goal (excluding own goals) in "
+                       "regulation?", "player_goal_scorer_anytime",
+                       "England", "DR Congo")
+    assert mkt == ("team_totals", "Over", 0.5)
+    # player subjects untouched
+    mkt = map_question("Will Harry Kane score a goal (excluding own goals)?",
+                       "player_goal_scorer_anytime", "England", "DR Congo")
+    assert mkt[0] == "player_goal_scorer_anytime"
+
+
+def test_dead_stat_column_not_zeroed():
+    import pandas as pd
+    import team_rates as tr
+    df = pd.DataFrame({"Performance_PKwon": [float("nan")] * 3,
+                       "Standard_PKatt": [1.0, 0.0, 2.0]})
+    col = tr._find_col_with_data(df, ("PKwon", "Performance_PKwon", "Standard_PKatt"))
+    assert col == "Standard_PKatt"   # dead all-NaN column skipped, live fallback used
+    assert tr._find_col_with_data(df, ("Performance_PKwon",)) is None

@@ -400,3 +400,31 @@ total-shots line-aware 20+→78/22+→68 with a PATCH queued over the old flat 5
 SOA off kalshi); review regenerated with LIVE labels. The 15-min sentinel
 applies everything to the open slate (USA–Bosnia next); morning.sh covers the
 full slate. WATCH nightly: family table + every gate; pull back any slider.
+
+## 2026-07-02 (post-mortem, ~03:30Z) — first new-regime night: 4 fixes from the USA–Bosnia grade
+Tonight settled: England–DR Congo −31, Belgium–Senegal +8, USA–Bosnia −90 (edge
+vs clone; the clone itself was −32 on USA–Bosnia — a field-hostile match).
+Per-question attribution of the −90 → four concrete defects, all fixed tonight:
+1. **h_total_shots_match over-confident on its first out**: linear λ-scaling +
+   sd 6.5 (both uncited guesses) priced '22+' at 87 vs field 57 → NO, −43 edge
+   (the single worst row). Now sqrt λ-scaling + sd 8.0 (sublinear shot volume,
+   empirical dispersion) → that row re-prices ~73. NOT outcome-chasing a single
+   NO: the parameters were never grounded; both changes move toward the
+   field-calibrated base. (Same handler would have WON England's '20+' either way.)
+2. **pk_won = 0.0 for every team incl. the tournament prior**: FBref's
+   Performance_PKwon column is ALL-NaN for WC2026 and fillna(0) laundered "no
+   data" into "zero pens" → qmodel priced pen|red 15 vs field 32 on a YES
+   (−26). Fix: _find_col_with_data skips dead columns (falls to Standard_PKatt,
+   which has real data). Family stays deliberately LOW (22% settled YES —
+   pricing low is why pen_or_red is +50 lifetime).
+3. **'win by N+ goals' had no pricer** (flat 0.35 placeholder; USA 35 vs field
+   46 YES −13, England 35 vs 51 NO +14 — luck, not pricing). h_win_by_margin:
+   Skellam margin from match λs (no goals-spread market on the tape).
+4. **Scorer-family classifier leaks**: 'a substitute' and TEAM subjects fell
+   into player_goal_scorer_anytime → token-match fails → 0.18 placeholder
+   (sub-scores −21 Belgium, DR-Congo-scores −28 England). Generic subjects now
+   classify NO_MARKET (h_substitute_scores prices them); team subjects map to
+   the team_totals Over 0.5 book line in map_question.
+Also of note: the go-live's other two USA–Bosnia re-prices WON (hydration
+corners 73 vs field 60 YES +9; card-1H 71→67 saved +6) — the night's new-regime
+net was −18, all of it the total-shots miss. 118 tests pass.

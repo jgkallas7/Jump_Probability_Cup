@@ -48,6 +48,12 @@ QTYPE_RULES: list[tuple[str, str, str]] = [
      "player_shots_on_target"),
     (r"shots? on target", "prop", "NO_MARKET"),
     (r"score or assist", "player_prop", "NO_MARKET"),
+    # GENERIC subjects ("a substitute", "any player") are not book players —
+    # the player rule below swallowed "Will a substitute score a goal
+    # (excluding own goals)?" onto a 0.18 placeholder (2026-07-01: field 32,
+    # YES, -21) when derive.h_substitute_scores prices it market-anchored.
+    (r"will (?:a|any) (?:substitute|player|sub|defender|midfielder|goalkeeper)"
+     r".{0,30}score a goal", "prop", "NO_MARKET"),
     (r"score a goal \(excluding own goals\)", "player_scorer",
      "player_goal_scorer_anytime"),
     (r"(first|opening) goal", "prop", "NO_MARKET"),

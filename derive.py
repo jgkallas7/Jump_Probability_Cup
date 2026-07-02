@@ -933,6 +933,22 @@ def h_team_corners_atleast_half(m, g, conn, now):
     return p_geq(lam_t, k), tier, f"team corners(at-least) lam={lam_t:.2f} P(>={k})"
 
 
+def h_win_by_margin(m, g, conn, now):
+    """'Will X win by N or more goals?' — Skellam margin on the market
+    goal-lambdas (no goals-spread market exists on the tape). Was falling to
+    the flat 0.35 placeholder every match (2026-07-01: USA priced 35 vs field
+    46 on a YES, England 35 vs 51 — the flat value ignores the favourite's λ
+    split, which is the entire question)."""
+    team = resolve_team(g.group(1), m["home"], m["away"])
+    if not team:
+        return None
+    n = int(g.group(2))
+    lh, la, _ = match_lambdas(conn, m, now)
+    lam_t, lam_o = (lh, la) if team == m["home"] else (la, lh)
+    return (skellam_geq(lam_t, lam_o, n), "derived",
+            f"win-by>={n} skellam {lam_t:.2f}/{lam_o:.2f}")
+
+
 def h_own_goal(m, g, conn, now):
     """'Will an own goal be scored?' — environment-level base rate (~7%); team form
     doesn't move it. The flat 0.35 catch-all was 5x too high."""
@@ -964,8 +980,14 @@ def h_total_shots_match(m, g, conn, now):
     18+ ~0.82, 20+ ~0.78, 25+ ~0.50, 30+ ~0.18 at a neutral goal line."""
     n = int(g.group(1))
     _, _, lt = match_lambdas(conn, m, now)
-    mean = 24.5 * (lt / BASE["goals_lambda"])
-    sd = 6.5
+    # sqrt scaling + sd 8.0 (2026-07-02): the first live out priced '22+' at 87
+    # vs a 57 field (goal line 3.05 -> LINEAR mean 28.8) and lost -43 on a NO.
+    # Linear lambda-scaling + sd 6.5 were uncited guesses — shot volume scales
+    # SUBLINEARLY with the goal line (defensive games still shoot) and match
+    # shot totals disperse ~8. Both changes pull every price toward the
+    # field-calibrated 0.58 base (that question re-prices 87 -> ~73).
+    mean = 24.5 * math.sqrt(lt / BASE["goals_lambda"])
+    sd = 8.0
     p = 0.5 * math.erfc((n - 0.5 - mean) / (sd * math.sqrt(2)))
     return p, "anchored", f"total-shots N({mean:.1f},{sd}) P(>={n})"
 
@@ -1005,6 +1027,7 @@ COVERAGE_HANDLERS = [
      h_corners_before_hydration),
     (r"[Ww]ill (.+?) have at least (\d+) corner kicks?"
      r"(?: in the (first|second) half)?", h_team_corners_atleast_half),
+    (r"[Ww]ill (.+?) win by (\d+) or more goals", h_win_by_margin),
     (r"own goal be scored", h_own_goal),
     (r"both teams .*(?:receive|record|be shown|get|have) (?:at least |1 or more )?"
      r"(?:one |1 |a )?card", h_both_teams_card),

@@ -302,6 +302,13 @@ def map_question(text: str, mapping: str, home: str, away: str):
     if mapping == "player_goal_scorer_anytime":
         m = re.match(r"Will (.+?) score a goal", t)
         if m:
+            # TEAM subject mis-bucketed by the classifier ("Will DR Congo score
+            # a goal (excluding own goals)?" — 2026-07-01: token-matched no book
+            # player, fell to an 0.18 placeholder vs field 37, YES, -28). A team
+            # scoring >=1 is the team-totals Over 0.5 book line.
+            team = resolve_team(m.group(1), home, away)
+            if team:
+                return ("team_totals", "Over", 0.5)
             toks = _player_tokens(m.group(1))   # strips accents + '(Country)'
             if toks:
                 return ("player_goal_scorer_anytime",

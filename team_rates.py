@@ -70,7 +70,12 @@ STAT_COLS = {
     "yellow":   ("CrdY", "Performance_CrdY", "cards_yellow"),
     "red":      ("CrdR", "Performance_CrdR", "cards_red"),
     "offsides": ("Off", "Performance_Off", "offsides"),
-    "pk_won":   ("PKwon", "Performance_PKwon"),
+    # PKwon/PKcon: FBref's misc sheet has published these as ALL-NaN for WC2026
+    # (found 2026-07-02: fillna(0) turned the dead column into "every team wins
+    # 0 penalties", tournament prior 0.0, and qmodel priced pen|red at 15 vs a
+    # 32 field). Standard_PKatt (shooting sheet) is the live fallback — a pen
+    # attempted ≈ a pen won. _find_col_with_data skips dead columns entirely.
+    "pk_won":   ("PKwon", "Performance_PKwon", "Standard_PKatt"),
     "pk_con":   ("PKcon", "Performance_PKcon"),
 }
 
@@ -94,6 +99,18 @@ def _find_col(df: pd.DataFrame, candidates) -> str | None:
         for lc, orig in cols.items():
             if lc.endswith(cand.lower()):
                 return orig
+    return None
+
+
+def _find_col_with_data(df: pd.DataFrame, candidates) -> str | None:
+    """Like _find_col, but a column that exists with ZERO non-null values is
+    treated as missing (a dead scrape column, not a real all-zero count) and
+    the next candidate is tried. Prevents fillna(0) laundering 'no data' into
+    'zero events' — the 2026-07-02 pk_won bug."""
+    for cand in candidates:
+        col = _find_col(df, (cand,))
+        if col is not None and pd.to_numeric(df[col], errors="coerce").notna().sum() > 0:
+            return col
     return None
 
 
@@ -127,7 +144,7 @@ def build_rates() -> dict[str, dict[str, float]]:
     matches = pd.to_numeric(df[mcol], errors="coerce") if mcol else pd.Series(1.0, index=df.index)
     matches = matches.clip(lower=1.0)
 
-    resolved = {s: _find_col(df, c) for s, c in STAT_COLS.items()}
+    resolved = {s: _find_col_with_data(df, c) for s, c in STAT_COLS.items()}
     # per-match rate per team-row, then tournament mean for the prior. FBref
     # leaves count columns BLANK (NaN) for zero events (common for penalties/
     # reds early in a tournament) — a blank is a 0 count, so fillna(0).

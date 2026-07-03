@@ -41,6 +41,14 @@ FOUL_DOM_SLOPE = float(os.environ.get("WC_FOULS_DOM", "0") or 0)
 # settled, 62% YES). Gate in review_report sweeps the slope.
 CARD_DOM_SLOPE = float(os.environ.get("WC_CARDS_DOM", "0") or 0)
 
+# MATCH-TOTAL offsides ('N or more offside calls'): blend the counted team-sum
+# lambda toward the tournament-environment lambda (2x the fresh FBref per-team
+# mean). The 2026-07-03 corpus split: env pricing gains +72/n=7 on the match-
+# total wording but LOSES -51/n=58 on team-level wording — so the blend applies
+# ONLY here; the team branch stays pure counted. w=0 -> counted (old behavior),
+# w=1 -> pure environment.
+OFF_ENV_W = float(os.environ.get("WC_OFF_ENV", "0") or 0)
+
 # both-teams >=1 SOT in a HALF: the hand-set 0.68 anchor overshot — post-fix
 # submissions averaged 0.70 vs a 0.63 field on questions that settle YES ~65%
 # (h1 62% n=8, h2 67% n=9 in the outcomes table), realizing -26 over n=10.
@@ -112,6 +120,12 @@ def price_question(text, home, away, rates, lam):
     if m:
         n = int(m.group(1))
         lam_off = _r(rates, home, "offsides", 1.3) + _r(rates, away, "offsides", 1.3)
+        if OFF_ENV_W > 0:
+            env = 2.0 * (rates.get("_tournament") or {}).get("offsides", 1.73)
+            lam_off = (1.0 - OFF_ENV_W) * lam_off + OFF_ENV_W * env
+            return (qprice.clip(qprice.prob_n_or_more(lam_off, n)),
+                    f"total offsides env-blend w={OFF_ENV_W:g} "
+                    f"lam={lam_off:.2f} P(>={n})")
         return (qprice.clip(qprice.prob_n_or_more(lam_off, n)),
                 f"total offsides counted lam={lam_off:.2f} P(>={n})")
 

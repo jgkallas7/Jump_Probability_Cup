@@ -441,3 +441,22 @@ def test_total_offside_calls_branch():
     res2 = qmodel.price_question("Will Spain be caught offside 2 or more times?",
                                  "Spain", "Austria", rates, (1.8, 0.9, 2.7))
     assert "offsides counted" in res2[1]
+
+
+def test_total_offside_env_blend(monkeypatch):
+    # WC_OFF_ENV blends the counted sum toward 2x the tournament mean —
+    # match-total branch ONLY (team wording stays pure counted, it wins there)
+    rates = {"Australia": {"offsides": 0.89}, "Egypt": {"offsides": 0.89},
+             "_tournament": {"offsides": 1.73}}
+    q = ("Will there be 3 or more offside calls in regulation (90 minutes + "
+         "stoppage time)?")
+    lam = (1.2, 1.2, 2.4)
+    p0 = qmodel.price_question(q, "Australia", "Egypt", rates, lam)  # counted 1.78
+    monkeypatch.setattr(qmodel, "OFF_ENV_W", 0.7)
+    p1 = qmodel.price_question(q, "Australia", "Egypt", rates, lam)
+    assert "env-blend" in p1[1] and "lam=2.96" in p1[1]   # .3*1.78 + .7*3.46
+    assert p1[0] > p0[0] + 0.15                            # ~0.25 -> ~0.57
+    # team-level wording is untouched by the flag
+    pt = qmodel.price_question("Will Egypt be caught offside 2 or more times?",
+                               "Australia", "Egypt", rates, lam)
+    assert "offsides counted" in pt[1]

@@ -178,7 +178,9 @@ def fetch_team_stats() -> None:
     stat type — fast). Totals + matches-played give per-match rates."""
     import soccerdata
     SHEET_DIR.mkdir(parents=True, exist_ok=True)
-    fb = soccerdata.FBref(leagues="INT-World Cup", seasons=2026)
+    # no_cache: soccerdata served a Jun-15 cached season page to every daily
+    # refresh (caught 2026-07-03 — rates were matchday-1 totals for 18 days)
+    fb = soccerdata.FBref(leagues="INT-World Cup", seasons=2026, no_cache=True)
     for st in STAT_TYPES:
         df = fb.read_team_season_stats(stat_type=st)
         df.columns = ["_".join([c for c in col if c]).strip("_")

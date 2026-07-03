@@ -511,3 +511,40 @@ Trading answer for Spain-Austria stayed: tight books = the fair (nothing to
 trade), wide books = untradeable spread; the one real edge was NO on total
 corners 9+ (Kalshi 0.59 vs two-sided-devigged fair 0.48, realized base 38%).
 134 tests pass.
+
+## 2026-07-03 — auto review (review_report.py)
+Realized edge vs consensus clone: -616. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-03.md`.
+
+## 2026-07-03 (~17:30Z, interactive) — STALE FBREF CACHE 18 DAYS + match-total offsides env blend
+Yesterday (Jul 2 slate) realized edge -147 over 4 matches (US-Bosnia -90,
+Spain-Austria -50); autopsy found three separate stories:
+1. **total-shots -43 blowup was already fixed** (sqrt-scaling + sd 8.0 shipped
+   2026-07-02 in derive.py — no further action; family history shows small
+   deviations were ~clone-level, only the one 87-vs-57 row blew up).
+2. **pen-or-red -26/-14 = variance, not method** — family stays +25/n=35
+   cumulative; counted-contrarian position intact, no change.
+3. **DATA BUG (the big one): soccerdata served the Jun-15 cached FBref season
+   page to every daily `team_rates.py refresh` for 18 days.** The sheets had
+   24 teams x 1 game (matchday-1 totals); Egypt/Colombia/Ghana/Argentina were
+   MISSING entirely (fell to defaults). Every counted rate qmodel used since
+   Jun 15 was ~matchday-1 + apif prior. Fix: `no_cache=True` in
+   fetch_team_stats (ref_rates.py:59 already did this — the pattern existed).
+   Fresh scrape verified: 48 teams, 3-4.3 games, tournament means shots 12.0
+   sot 4.0 fouls 11.2 offsides 1.73.
+4. **WC_OFF_ENV=0.7 shipped + flipped** (flag default 0): match-total
+   'N or more offside calls' now blends counted sum toward 2x tournament mean
+   (env lam 3.46; outcome-MLE says 4.4). Evidence: family -42/n=67 cumulative;
+   realized 5/7 YES at N=3-4 vs our 26-35 sends; env re-price +72 (w=1) /
+   +58 (w=0.7) on the 7 settled match-total rows, +10 after drop-2-best;
+   team-level wording REJECTS env (-51/n=58) so the blend is match-total ONLY.
+   Same-sample n=7 (thin) but the deviation moves TOWARD the field (~49) and
+   replaces a diagnosed artifact. w=0.7 not the monotone grid-edge 1.0.
+   Today's re-prices: AUS-EGY 3+ offsides 45->57, COL-GHA 48->78 (Colombia
+   counted 3.29/match is real fresh signal). 135 tests pass.
+- CANDIDATE (not shipped, n=1): 'substitution before halftime' still hits the
+  unclassified 0.35 placeholder (US-Bosnia settled NO, field 23, cost -7;
+  AUS-EGY submitted 35 today). A ~0.22 base handler is a WC_PH_COVERAGE-style
+  addition — needs the wording family to recur before it's worth a handler.
+- cards-spread shrink candidate: today's gate line is the SAME n=21 as the
+  2026-07-02 investigation (no new settled rows); drop-3-best still fails
+  (+29 -> -2). NOT flipped, per the inline review_report note.

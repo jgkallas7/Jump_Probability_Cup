@@ -185,3 +185,21 @@ export WC_PH_COVERAGE=1
 # (flip it, then watch the score_or_assist family row for a week; revert on
 # regression).
 # export WC_KALSHI_SOA_MAXSPREAD=0.08
+# Match-total offsides environment blend (WC_OFF_ENV, default 0 = pure counted).
+# The 'N or more offside calls' KO wording is an ENVIRONMENT stat (semi-auto
+# offside tech; realized 5/7 YES at N=3-4 while we sent 26-35 vs a ~49 field;
+# outcome-MLE lambda 4.4 vs counted ~2.5). Root causes fixed same day: (1)
+# soccerdata served a Jun-15 cached FBref page to every daily team_rates
+# refresh for 18 days (no_cache=True now forced — rates were matchday-1
+# totals), (2) even fresh counted sums under-read the calls environment.
+# Blend: lam = (1-w)*counted_sum + w*2*tournament_mean (fresh mean 1.73/team
+# -> env lam 3.46, auto-updates with each refresh). Gate 2026-07-03: env
+# pricing on the 7 settled match-total rows +72 (w=1) / +58 (w=0.7), still
+# +10 after dropping the 2 best rows; team-level wording LOSES -51/n=58 under
+# env, so the blend applies ONLY to the match-total branch. Same-sample n=7,
+# thin by the REF_CARDS standard, but the deviation is TOWARD the field
+# (w=0.7 prices ~55/N3, ~43/N4 vs field ~49) and replaces a diagnosed
+# artifact (flat 0.35 / stale-data counted). w=0.7 not 1.0: the grid is
+# monotone to the edge — don't chase it. WATCH the offsides family row
+# nightly; pull toward 0 if the match-total rows regress.
+export WC_OFF_ENV=0.7

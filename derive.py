@@ -349,6 +349,7 @@ BASE = {
     "total_shots_rate": 0.58,     # P(>=20-22 total shots) — matches avg ~25 (flat base)
     "stoppage_goal_rate": 0.13,   # goal in one half's stoppage window — short, low
     "goal_share_after75": 0.23,   # share of match goals after the ~75' break (back-loaded)
+    "sub_before_half_rate": 0.22,  # >=1 sub before halftime (injury-driven; field 22-23 twice)
 }
 
 
@@ -1084,6 +1085,26 @@ def h_goal_after_2nd_break(m, g, conn, now):
     return 1 - math.exp(-lam), "derived", f"goal-after-2nd-break lam={lam:.2f}"
 
 
+def h_clean_sheet(m, g, conn, now):
+    """'Will X keep a clean sheet?' — P(opponent scores 0) = exp(-lam_opp) off
+    the market goal lambdas. Argentina-Cabo Verde (2026-07-03) went out as an
+    unclassified 0.35 placeholder vs a 0.64 field; exp(-lam_opp) reproduces
+    the field from data we already had on the tape."""
+    team = resolve_team(g.group(1), m["home"], m["away"])
+    if not team:
+        return None
+    lam_h, lam_a, _ = match_lambdas(conn, m, now)
+    lam_opp = lam_a if team == m["home"] else lam_h
+    return math.exp(-lam_opp), "derived", f"clean-sheet exp(-{lam_opp:.2f})"
+
+
+def h_sub_before_half(m, g, conn, now):
+    """'Will a substitution be made before halftime?' — environment-level base;
+    the unclassified 0.35 fallback sat ~12 pts above a consistent 0.22-0.23
+    field (US-Bosnia settled NO; asked again AUS-EGY 2026-07-03)."""
+    return BASE["sub_before_half_rate"], "base", "sub-before-half base"
+
+
 # Tried as a FALLBACK only (after qmodel + HANDLERS), and only when PH_COVERAGE_ON.
 COVERAGE_HANDLERS = [
     (r"(?:regulation|the match|match).*end in a tie|end in a tie", h_ends_in_tie),
@@ -1115,6 +1136,8 @@ COVERAGE_HANDLERS = [
     (r"goal be scored in (?:first|second)[\s-]half stoppage", h_stoppage_goal),
     (r"goal.*after the second hydration break", h_goal_after_2nd_break),
     (r"[Ww]ill a substitute score a goal", h_substitute_scores),
+    (r"[Ww]ill (.+?) keep a clean sheet", h_clean_sheet),
+    (r"substitution be made before halftime", h_sub_before_half),
     (r"[Ww]ill (.+?) score in both halves", h_score_both_halves),
     (r"(first|second) half have (\d+) or (more|fewer|less) total goals",
      h_half_total_goals),

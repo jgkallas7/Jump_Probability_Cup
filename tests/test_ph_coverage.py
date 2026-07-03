@@ -272,3 +272,38 @@ def test_team_first_goal_scales_with_favourite():
     pa, _, _ = derive.h_team_first_goal_match(m, fav, conn, now)
     pb, _, _ = derive.h_team_first_goal_match(m, dog, conn, now)
     assert pa > pb and pa > 0.45        # favourite well above the flat 0.35 placeholder
+
+
+# ---- clean sheet -> exp(-lam_opp) off the market lambdas ----
+
+def test_clean_sheet_prices_from_opponent_lambda():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    # heavy favorite: total 2.5-line under prob low (high-scoring), home dominant
+    _snap(conn, "totals", "Under", 2.5, 0.35)
+    _snap(conn, "h2h", "Argentina", None, 0.80)
+    m = {"match_id": "M1", "home": "Argentina", "away": "Cape Verde"}
+    pat = next(p for p, fn in derive.COVERAGE_HANDLERS if fn is derive.h_clean_sheet)
+    g = re.search(pat, "Will Argentina keep a clean sheet in regulation "
+                       "(90 minutes + stoppage time)?")
+    assert g is not None
+    p, tier, tag = derive.h_clean_sheet(m, g, conn, now)
+    lam_h, lam_a, _ = derive.match_lambdas(conn, m, now)
+    assert abs(p - pow(2.718281828, -lam_a)) < 1e-6 and tier == "derived"
+    # the favorite's clean sheet must be MORE likely than the minnow's
+    g2 = re.search(pat, "Will Cape Verde keep a clean sheet in regulation "
+                        "(90 minutes + stoppage time)?")
+    p2, _, _ = derive.h_clean_sheet(m, g2, conn, now)
+    assert p > p2
+
+
+def test_sub_before_half_base():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    m = {"match_id": "M1", "home": "Australia", "away": "Egypt"}
+    pat = next(p for p, fn in derive.COVERAGE_HANDLERS
+               if fn is derive.h_sub_before_half)
+    g = re.search(pat, "Will a substitution be made before halftime?")
+    assert g is not None
+    p, tier, _ = derive.h_sub_before_half(m, g, conn, now)
+    assert abs(p - 0.22) < 1e-9 and tier == "base"

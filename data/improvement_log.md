@@ -550,3 +550,22 @@ Algeria -16, Portugal-Croatia +9 (~-57). Autopsy found three separate stories:
 - cards-spread shrink candidate: today's gate line is the SAME n=21 as the
   2026-07-02 investigation (no new settled rows); drop-3-best still fails
   (+29 -> -2). NOT flipped, per the inline review_report note.
+
+## 2026-07-03 (~22:45Z, interactive) — two coverage handlers off the Argentina-Cabo Verde lock email
+User spotted us "off market" on ARG-CV. Locked-email diff: the big deviations
+split into one artifact, one suspect, and several deliberate edges:
+- ARTIFACT (fixed): "keep a clean sheet" had no classifier mapping/handler ->
+  unclassified 0.35 placeholder vs a 0.64 field. New h_clean_sheet prices
+  P(opp scores 0)=exp(-lam_opp) off match_lambdas; on the real ARG-CV tape it
+  gives 0.68 (field 0.64) — the number was already on the tape. Too late for
+  ARG-CV (locked) but live for R16+ (2x).
+- ARTIFACT (fixed): "substitution be made before halftime" -> h_sub_before_half
+  base 0.22 (field 22-23 in both asks; the 0.35 fallback settled NO once).
+- SUSPECT (logged to opportunities, n=2): team-corners for heavy favorites
+  (Poisson underdispersion) — not shipped.
+- DELIBERATE (no action): devcap h2h 86->77, both-halves 44 vs fld 58,
+  SOT anchors — validated deviations doing their job.
+- AUS-EGY diff sanity: env-blend offsides went out 57 vs fld 53 (near-field as
+  designed); pen|red 11 vs 32 is the +25/n=35 counted-contrarian family on
+  fresh rates — its most extreme send yet, watch the family row.
+137 tests pass.

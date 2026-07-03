@@ -516,8 +516,10 @@ corners 9+ (Kalshi 0.59 vs two-sided-devigged fair 0.48, realized base 38%).
 Realized edge vs consensus clone: -616. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-03.md`.
 
 ## 2026-07-03 (~17:30Z, interactive) — STALE FBREF CACHE 18 DAYS + match-total offsides env blend
-Yesterday (Jul 2 slate) realized edge -147 over 4 matches (US-Bosnia -90,
-Spain-Austria -50); autopsy found three separate stories:
+The 4 matches graded in today's harvest realized edge -147, spanning TWO
+slates (user's catch — not one day): Jul 1 evening US-Bosnia -90 (that slate
+totals ~-93 with England-Congo -31); Jul 2 Spain-Austria -50, Switzerland-
+Algeria -16, Portugal-Croatia +9 (~-57). Autopsy found three separate stories:
 1. **total-shots -43 blowup was already fixed** (sqrt-scaling + sd 8.0 shipped
    2026-07-02 in derive.py — no further action; family history shows small
    deviations were ~clone-level, only the one 87-vs-57 row blew up).

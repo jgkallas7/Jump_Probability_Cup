@@ -68,18 +68,35 @@ def run(conn):
             break
 
     if graded:
+        # ph is None when no placeholder forecast exists for the row: either it
+        # was sent by a real pricer (qmodel/HANDLERS — the production router is
+        # fallback-only and never fires on those; verified 2026-07-04: the bulk
+        # are 'pen+red union'/'qmodel pen|red'/'anchored sot' sends) or, post
+        # 2026-06-28 flip, by coverage itself. Neither answers "coverage vs
+        # placeholder", so the gate verdict uses only the placeholder-sent rows.
         print("=== GRADED (settled + field data): coverage vs placeholder ===")
         print(" label              ko          cov   ph    out  cov_rel  ph_rel   delta")
-        d = 0.0
+        d_gate, n_gate, d_fwd, n_fwd = 0.0, 0, 0.0, 0
         for r in graded:
             delta = r["cov_rel"] - r["ph_rel"]
-            d += delta
-            print("  %-17s %s  %.2f %.2f  %s  %+7.1f %+7.1f %+7.1f" %
-                  (r["label"], r["ko"], r["cov"], r["ph"], r["out"],
+            if r["ph"] is not None:
+                d_gate += delta
+                n_gate += 1
+            else:
+                d_fwd += r["ph_rel"]   # realized rel pts of the sent coverage price
+                n_fwd += 1
+            ph_s = "%.2f" % r["ph"] if r["ph"] is not None else "sent"
+            print("  %-17s %s  %.2f %s  %s  %+7.1f %+7.1f %+7.1f" %
+                  (r["label"], r["ko"], r["cov"], ph_s, r["out"],
                    r["cov_rel"], r["ph_rel"], delta))
-        verdict = "APPROVE" if d > 0 else "HOLD/REJECT"
-        print(f"\n  n={len(graded)}  total edge delta (coverage - placeholder) = "
-              f"{d:+.1f}  -> {verdict}")
+        if n_gate:
+            verdict = "APPROVE" if d_gate > 0 else "HOLD/REJECT"
+            print(f"\n  gate (placeholder-sent rows): n={n_gate}  delta "
+                  f"(coverage - placeholder) = {d_gate:+.1f}  -> {verdict}")
+        if n_fwd:
+            print(f"  non-placeholder rows (sent by qmodel/handlers or, post-flip, "
+                  f"coverage — context only, not the gate): n={n_fwd}  "
+                  f"realized rel pts = {d_fwd:+.1f}")
     else:
         print("=== no settled coverage targets with field data yet — gate PENDING ===")
         print("    (run after the next /harvest-locked brings these emails into the corpus)")

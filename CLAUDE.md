@@ -98,8 +98,8 @@ WC_DB_PATH=/home/jgkal/wc_cup.db $PY audit.py          # ranked opportunity back
 ingest_questions.py   SP lobby -> questions table; classifies each text ->
                       (qtype, market_mapping) or NO_MARKET (= alpha question)
         |
-snapshot.py           bookmaker gateway (free, continuous) + pinnacle (Odds API,
-                      rationed) -> market_snapshots tape; both devig methods stored
+snapshot.py           pinnacle + whitelist books (Odds API, rationed) ->
+                      market_snapshots tape; both devig methods stored
         |
    +----+----------------------------+
    |                                 |

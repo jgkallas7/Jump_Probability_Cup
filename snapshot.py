@@ -1,12 +1,13 @@
-"""Build-order step 4: snapshot fetchers -> market_snapshots tape.
+"""Build-order step 4: snapshot fetcher -> market_snapshots tape.
 
-Two sources, one table:
-  snapshot_bookmaker()   free gateway pull, all WC leagues (continuous tape)
   snapshot_pinnacle()    targeted Odds API pull near deadlines (2 credits per
                          event: h2h,totals x eu) — the rationed sharp anchor
 
+(The free BookMaker gateway source was removed 2026-07-12 — its auth broke
+and the Odds API tape covers pricing alone; historical rows with
+source='bookmaker_gateway' remain on the tape.)
+
 Usage:
-  python snapshot.py bookmaker
   python snapshot.py pinnacle [--hours 48]
 """
 
@@ -17,9 +18,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 import db
-import bookmaker_client
 from config import SPORT_KEY
-from devig import american_to_prob, decimal_to_prob, devig_probs, devig_three_way
+from devig import decimal_to_prob, devig_probs, devig_three_way
 from odds_client import OddsClient
 
 
@@ -40,61 +40,6 @@ def _insert(conn, rows: list[tuple]) -> None:
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         rows)
     conn.commit()
-
-
-# --------------------------------------------------------------------------
-# BookMaker gateway (free)
-# --------------------------------------------------------------------------
-
-def snapshot_bookmaker(conn) -> int:
-    ts = _now()
-    raw = bookmaker_client.fetch_schedule()
-    games = bookmaker_client.parse_games(raw)
-    rows: list[tuple] = []
-    flagged = 0
-
-    for g in games:
-        if g["kind"] == "match":
-            probs = [american_to_prob(s["american"]) for s in g["selections"]]
-            tw = devig_three_way(*probs)  # selections ordered home/draw/away
-            fair = [tw.home, tw.draw, tw.away]
-            fair_m = [tw.home_mult, tw.draw_mult, tw.away_mult]
-            if tw.flagged:
-                flagged += 1
-                print(f"[divergence] {g['event_label']}: {tw.divergence_pts}pts",
-                      file=sys.stderr)
-            for sel, rp, fp, fm in zip(g["selections"], probs, fair, fair_m):
-                rows.append((ts, "bookmaker_gateway", "bookmaker_eu", None,
-                             g["event_label"], "h2h", sel["label"], None,
-                             None, rp, fp, fm, tw.divergence_pts, ts))
-            for t in g.get("totals", []):
-                rp_o = american_to_prob(t["over"])
-                rp_u = american_to_prob(t["under"])
-                f_o, f_u = devig_probs([rp_o, rp_u], "power")
-                m_o, m_u = devig_probs([rp_o, rp_u], "multiplicative")
-                div = round(max(abs(f_o - m_o), abs(f_u - m_u)) * 100, 3)
-                rows.append((ts, "bookmaker_gateway", "bookmaker_eu", None,
-                             g["event_label"], "totals", "Over", t["point"],
-                             None, rp_o, f_o, m_o, div, ts))
-                rows.append((ts, "bookmaker_gateway", "bookmaker_eu", None,
-                             g["event_label"], "totals", "Under", t["point"],
-                             None, rp_u, f_u, m_u, div, ts))
-        else:
-            probs = [american_to_prob(s["american"]) for s in g["selections"]]
-            fair = devig_probs(probs, "power")
-            fair_m = devig_probs(probs, "multiplicative")
-            market = f"futures:{g['league_desc']}"
-            for sel, rp, fp, fm in zip(g["selections"], probs, fair, fair_m):
-                rows.append((ts, "bookmaker_gateway", "bookmaker_eu", None,
-                             g["event_label"], market, sel["label"], None,
-                             None, rp, fp, fm,
-                             round(max(abs(a - b) for a, b in zip(fair, fair_m)) * 100, 3),
-                             ts))
-
-    _insert(conn, rows)
-    print(f"bookmaker: {len(games)} markets -> {len(rows)} rows "
-          f"({flagged} divergence-flagged)")
-    return len(rows)
 
 
 # --------------------------------------------------------------------------
@@ -215,10 +160,8 @@ def snapshot_pinnacle(conn, hours: int = 48, markets: str = "",
 
 if __name__ == "__main__":
     conn = db.init()
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "bookmaker"
-    if cmd == "bookmaker":
-        snapshot_bookmaker(conn)
-    elif cmd == "pinnacle":
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "pinnacle"
+    if cmd == "pinnacle":
         hours = int(sys.argv[sys.argv.index("--hours") + 1]) \
             if "--hours" in sys.argv else 48
         snapshot_pinnacle(conn, hours)

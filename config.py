@@ -20,22 +20,6 @@ SPORT_KEY = "soccer_fifa_world_cup"  # verified against /sports by fetch_schedul
 PINNACLE_REGION = "eu"               # Pinnacle rides the eu region
 CORE_MARKETS = "h2h,totals"
 
-# BookMaker BetslipProxy gateway (mirrors kalshi-tracker clients/bookmaker.py)
-BETSLIP_BASE = "https://be.bookmaker.eu/gateway/BetslipProxy.aspx"
-WC_MATCH_LEAGUE = "12641"
-WC_LEAGUES: dict[str, str] = {
-    "12641": "MATCHES",
-    "13335": "ODDS TO WIN",
-    "19791": "NAME THE FINALISTS",
-    "19787": "WINNING CONFEDERATION",
-    "19987": "TO REACH ROUND X",
-    "17147": "GROUP FUTURES - SPECIALS",
-    "20191": "GROUP A", "20192": "GROUP B", "20193": "GROUP C",
-    "20194": "GROUP D", "20195": "GROUP E", "20196": "GROUP F",
-    "20197": "GROUP G", "20198": "GROUP H", "20199": "GROUP I",
-    "20200": "GROUP J", "20201": "GROUP K", "20202": "GROUP L",
-}
-
 # Consensus is WHITELIST-ONLY: books with weight > 0 enter fair value;
 # everything else (45+ soft books echoing each other) is excluded from
 # pricing but still snapshotted — soft-book average is the CROWD PROXY
@@ -46,7 +30,8 @@ WC_LEAGUES: dict[str, str] = {
 BOOK_WEIGHTS: dict[str, float] = {
     "pinnacle": 3.0,
     "betfair_ex_uk": 2.5,     # deepest market list (32), near-zero overround
-    "bookmaker_eu": 1.5,      # our gateway tape (sharp offshore)
+    # bookmaker_eu removed 2026-07-12 — free gateway retired (auth broke,
+    # tape had been dark); historical bookmaker_gateway rows stay in the DB.
     "kalshi": 1.5,            # our own data, liquid near kickoff
     "matchbook": 0.5,         # exchange echo of betfair — low extra info
     "smarkets": 0.5,

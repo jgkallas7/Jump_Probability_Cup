@@ -40,8 +40,8 @@ CREATE TABLE IF NOT EXISTS questions(
 CREATE TABLE IF NOT EXISTS market_snapshots(
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     ts             TEXT NOT NULL,
-    source         TEXT NOT NULL,       -- odds_api | bookmaker_gateway
-    book           TEXT NOT NULL,       -- pinnacle | bookmaker_eu | ...
+    source         TEXT NOT NULL,       -- odds_api (hist. rows: bookmaker_gateway)
+    book           TEXT NOT NULL,       -- pinnacle | betfair_ex_uk | ...
     match_id       TEXT,
     event_label    TEXT,
     market         TEXT NOT NULL,       -- h2h | totals | futures:<league>

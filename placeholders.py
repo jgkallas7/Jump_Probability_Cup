@@ -45,6 +45,15 @@ FAMILIES = [
     # (h_any_player_sot_brace); this only backstops. Must precede the per-player rules.
     (r"any player (?:record|have) \d+ or more shots on target", 0.72,
      "any-player 2+ SOT — near-certain, field ~0.70"),
+    # SAME rule, team-named ("any <team> player 2+ SOT"): the team word between
+    # "any" and "player" defeats the pattern above, so it fell through to the
+    # per-player 0.15 rule below — wrong-side, since "any team player" is a
+    # one-team UNION (~11 players), not one player. One-team target ~0.46 =
+    # derive.h_any_player_sot_brace's per-team term (its both-teams union
+    # reproduces the field ~0.70). Restricted to "2 or more" so the 1+ any-player
+    # variant still routes to its own rule. (POR-ESP R16, 2026-07-06: sent 0.15.)
+    (r"any .+? player (?:record|have) 2 or more shots on target", 0.46,
+     "any-[team]-player 2+ SOT — one-team union ~0.46 (field both-teams ~0.70)"),
     # a SINGLE player's 1+ SOT (either phrasing). Distinct from 2+ below — the old
     # rule lumped '1 or more shots' into the 2+ rate (0.15); 1+ realized 0.231 (n=39).
     (r"at least 1 shot on target|1 or more shots? on target", 0.25,
@@ -88,6 +97,13 @@ FAMILIES = [
      "stoppage-time goal — short window (was 0.35)"),
     (r"goal.*after the second hydration break", 0.45,
      "goal in last ~15'+ — goals back-loaded (was 0.35)"),
+    # Match-scoped "goal in each half" (KO wording, recurs every match; mapped to
+    # totals but bookless so it fell to the 0.35 catch-all — cost -22 USA-BEL
+    # 2026-07-07). Closed form (1-exp(-lam/2))^2 at tournament lam~2.6 = 0.53;
+    # field 0.55 on the one settled row. Team-scoped "score in both halves" is
+    # derive.h_score_both_halves and never reaches here.
+    (r"(?:at least one|a|1(?: or more)?) goals? be scored in each half", 0.53,
+     "goal in each half of regulation ~0.53 (was 0.35)"),
     (r"", 0.35, "unclassified fallback — realized 0.34 over n=32 settled (non-SOT residual)"),
 ]
 

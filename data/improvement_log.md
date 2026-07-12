@@ -569,3 +569,289 @@ split into one artifact, one suspect, and several deliberate edges:
   designed); pen|red 11 vs 32 is the +25/n=35 counted-contrarian family on
   fresh rates — its most extreme send yet, watch the family row.
 137 tests pass.
+
+## 2026-07-04 — auto review (review_report.py)
+Realized edge vs consensus clone: -534. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-04.md`.
+
+## 2026-07-04 — /review-gates: nightly gate review (no flips; PH_COVERAGE gate cleared)
+Corpus fresh: 826 -> 882 settled (+56); total edge -616 -> -534 (**+82 day vs field** —
+ours +431 vs clone +348 on the new rows). Gate-by-gate decisions:
+- **No flips, no pull-backs.** All 8 LIVE gates APPROVE or HOLD; no LIVE flag REJECTs.
+- **cards-spread / team_totals shrink (candidates, APPROVE +29/n=21 and +22/n=17): stay OFF.**
+  Both previously FAILED drop-3-best (+29->-2, +21->-1 — review_report.py:675); the gain sits
+  in ~3 rows. Same n as when checked (21/17-ish) — nothing new to re-litigate. Tracking-only lines.
+- **WC_PH_COVERAGE gate CLEARED on settled data (the WATCH item since 06-28):**
+  validate_ph_coverage.py = coverage vs placeholder **+95.3 over n=65 -> APPROVE**.
+  The script had crashed on ph=None rows (questions never placeholder-sent — bulk are
+  qmodel/handler sends where the fallback-only router never fires; post-flip rows are
+  coverage-sent). Fixed: gate verdict now uses only placeholder-sent rows; non-placeholder
+  rows (n=104, realized +204) printed as context, excluded from the gate. 137 tests pass.
+- **WC_KALSHI_NO_SOA cleared MIN_N**: +24/n=8 (was thin n=5 at flip). Inline note updated.
+- **WC_OFF_ENV verified scoring** (step-4 check): 'env-blend w=0.7' tag on submitted
+  forecasts Jul 3 + Jul 4; offsides family -42 -> -38 on day 1. NOTE: review_report has
+  NO gate line for WC_OFF_ENV — judged via family row only; an _off_env_gain gate fn is
+  a candidate improvement.
+- **Split SOT anchors (LIVE)**: gate +114/n=60 (was +130/n=54 yesterday, +125/n=47 at flip).
+  Marginal day negative: sot_team family +31 -> +9 on 5 new rows. One day != a slide;
+  still APPROVE with margin. WATCH continues — pull back if the gain keeps decaying.
+- Unchanged (no new settles): fouls_race n=55, sot_race n=45, corners_race thin —
+  WC_FOULS_DOM/WC_SOT_RACE_DECOMP/WC_CORNER_SUP_SLOPE watches carry as-is.
+- WC_REF_CARDS still HOLD-thin n=3 (flat +1 vs tilted +22, right direction); waiting n>=8.
+- WC_BTS_HALF_ANCHOR flat again (-2/n=16): 0.68 default re-confirmed, stays unset.
+- Forward movers on the +56 new rows: player_shots_on_target -156 -> -142 (anchor working
+  forward), NO_MARKET -444 -> -425, hydration -29 -> -16, other -29 -> -6; worse:
+  player_goal_scorer_anytime -58 -> -68 (no flag covers this bucket — backlog item).
+
+## 2026-07-05 — auto review (review_report.py)
+Realized edge vs consensus clone: -513 (regenerated post-harvest; the 06:30 auto run saw a stale 882-Q corpus). Flag-validation gate + per-bucket edges in `data/reviews/2026-07-05.md`.
+
+## 2026-07-05 — /review-gates: harvest + gate review (no flips; OFF_ENV stress-tested, kept)
+Corpus was STALE at review time (882, identical numbers to Jul-4) — harvested 3 R16
+locked emails (COL-GHA, CAN-MAR, PAR-FRA), re-settled, regenerated the review:
+927 settled, edge -534 -> **-513** (+20.3 on the new slate: PAR-FRA +29.3,
+CAN-MAR +4.0, COL-GHA -13.0). Decisions:
+- **No flips, no pull-backs.** Candidates all HOLD (thin/flat); CONCENTRATED shrink
+  pair unchanged (n=21/17, drop-3 failures stand); WC_REF_CARDS still n=3.
+- **WC_OFF_ENV kept at 0.7 after a real stress test.** Offsides family -38 -> -64
+  looked like the pull-back trigger, but it was ONE row: COL-GHA "3+ offside calls"
+  sent 0.78 (env-blend lam=4.10), settled NO, field ~0.40, rel -46. Attribution:
+  fresh post-cache-fix counted sum ~5.7 (Colombia counted 3.07/match — verified real,
+  tournament mean normal at 1.71) would have priced ~0.88 = rel ~-63; the env blend
+  moderated to 0.78, i.e. **+17 vs its counterfactual on the losing row**. Same-sample
+  env-vs-counted tally now ~+75/n=8, drop-2-best ~+27 (cushion RESTORED). The loss
+  belongs to counted-layer overconfidence. Flags.sh note updated with the lesson:
+  judge OFF_ENV env-vs-counted, not by the family row alone. (Irony logged: the
+  stale 0.48 morning send would have scored better here; the no_cache fix is still
+  right in expectation.)
+- **Split SOT anchors recovered**: +114 -> +124/n=63; sot_team family +9 -> +26.
+  Yesterday's decay concern closed.
+- **NEW WATCH — pen_or_red family**: +14 -> +1 on 3 new rows. Yesterday's diff
+  sanity flagged AUS-EGY pen|red 11-vs-32 as "most extreme send yet"; the family
+  regressed on cue. No flag governs it (qmodel core counted-contrarian). If it
+  goes negative at n>=16, the qmodel pen_or_red branch joins the investigate list.
+- score_or_assist family -68 -> -78 (4 new book-union/placeholder rows, -10);
+  WC_KALSHI_NO_SOA gate itself unchanged (+24/n=8). Watching.
+- Forward positives: to_advance +16 -> +23/n=6 (TO_ADVANCE_H2H working at KO 2x);
+  player_goal_scorer_anytime -68 -> -56; player SOT flat under the anchor.
+- **Re-verified (2nd /review-gates pass, same day)** rather than carry stale numbers:
+  recomputed the drop-3-best shrink sensitivity on TODAY's corpus — cards-spread
+  +29.2 total collapses to **-2.1** (top-3 rows = +31.3, i.e. > the whole gain),
+  team_totals +22.1 -> **+0.1** (top-3 = +22.0). Both stay OFF; the 07-02 phantom
+  diagnosis holds at the larger n=21/17. validate_ph_coverage.py re-run clean, net
+  coverage-vs-placeholder +667 across graded rows (gate slice was +95/n=65 on 07-04)
+  -> WC_PH_COVERAGE holds. No change to any flag.
+
+## 2026-07-06 — auto review (review_report.py)
+Realized edge vs consensus clone: -545 (regenerated post-harvest; the 06:34 auto run saw a stale 927-Q corpus and reported -513). Flag-validation gate + per-bucket edges in `data/reviews/2026-07-06.md`.
+
+## 2026-07-06 — /review-gates: harvest + gate review (no flips; corpus 927 -> 941)
+Corpus was STALE at review time (927, byte-identical to Jul-5) — /harvest-locked
+pulled the one missing locked email (Brazil vs Norway, Jul-5 R16, 2x), re-settled,
+regenerated: **941 settled, edge -513 -> -545** (BRA-NOR alone: ours -2.75 vs clone
++29.15 = **-31.9** edge on a 2x KO game). Decisions:
+- **No flips, no pull-backs.** Every LIVE flag holds its gate: DEVCAP +29/n=64,
+  SOT_THRESH +95/n=79, PLAYER_SOT +92/n=61, SOT_RACE_DECOMP +18/n=45, FOULS_DOM
+  +123/n=55, SOT split +125/n=65, KALSHI_NO_SOA +24/n=8, CORNER_SUP HOLD-thin(n=2).
+  Candidates all HOLD (BTS_HALF flat -2/n=16, CARDS_DOM n=0, REF_CARDS n=3).
+- **CONCENTRATED shrink pair still phantom.** BRA-NOR added ZERO rows to either
+  bucket (alternate_spreads_cards n=21, team_totals n=17 both unchanged); drop-3
+  re-run on the 941-Q corpus reproduces exactly: cards-spread +29.2 -> **-2.1**
+  (top-3 = +31.3), team_totals +22.1 -> **+0.1** (top-3 = +22.0). Both stay OFF.
+- **WC_PH_COVERAGE holds** — validate_ph_coverage.py net coverage-vs-placeholder
+  +667 -> **+695.9** across graded rows (grew with the new game). Watch clean.
+- **WATCH pen_or_red**: +1/n=14 -> **-7/n=15** on the one new BRA-NOR row — now
+  negative but still one short of the n>=16 investigate trigger set yesterday.
+  our_p==fld_p==0.27 (deviation ~0), so the -7 is realized noise on earlier rows,
+  not a fresh systematic bias. Re-check at n>=16: if still negative, the qmodel
+  pen_or_red branch joins the investigate list.
+- **player_shots_on_target** bucket -143 -> -159 (a BRA-NOR star hit his SOT line),
+  but the PLAYER_SOT_ANCHOR gate held at +92 — flag still beats its counterfactual;
+  the residual is the standing "books overprice player SOT, we shade past" loss.
+- Forward: to_advance +23 -> +14/n=7 (BRA advance priced, edge shrank but stays
+  positive at KO 2x); score_or_assist family -78 -> -75; SOT split gate +124 -> +125.
+
+## 2026-07-06 — pre-game diff-sanity (POR-ESP / USA-BEL R16, 2x): "any [team] player 2+ SOT" = 0.15 bug
+Pre-kickoff sanity pass on the two R16 games (both 2x). No flag changes (correct —
+we don't tune globally-gated flags per-game). Found ONE genuine wrong-side price:
+- **POR-ESP "Will any Portugal player have 2+ shots on target?" submitted at 0.15.**
+  Root cause: `placeholders.py` FAMILIES has the right rule (`any player (record|
+  have) N or more shots on target` -> 0.72, comment says "must precede the per-
+  player rules"), but its regex needs "any player" ADJACENT. A team word ("any
+  **Portugal** player have...") defeats it, so the Q fell through to the per-player
+  `have \d+ or more shots on target` -> **0.15** rule (self-flagged "must be < the
+  0.23 single-SOT rate (monotonic) UNVERIFIED" — inverted logic: "any player" is a
+  one-team UNION, not one player). Correct value ~**0.46**: derive.h_any_player_sot_
+  brace's per-team term = 0.458, and its both-teams union = 0.706 ≈ the field
+  comparable (locked-email "any player 2+ SOT" field = 0.70). ~31pt wrong-side x2.
+- **Won't self-heal** (the [[placeholder-reprice-architecture]] dead zone): book-
+  mapped-but-bookless + already-submitted -> forecast.run skips it (not in the
+  revise sheet), derive skips it (not NO_MARKET), placeholders.run skips it
+  (submitted). The sentinel would leave 0.15 through kickoff.
+- **Durable fix (shipped):** added a team-named rule to placeholders.py FAMILIES,
+  `any .+? player (?:record|have) 2 or more shots on target` -> 0.46, placed right
+  after the both-teams rule. Restricted to "2 or more" so the 1+ any-player variant
+  still routes to its own rule. 137/137 tests pass; regressions verified (both-teams
+  any-player still 0.72, single-player 2+ still 0.15, team-SOT-total still 0.45, any-
+  player-1+ still 0.25). Helps FUTURE games (QF/SF/final); does NOT touch the locked
+  POR-ESP Q.
+- **Live fix (user-authorized):** PATCHed prediction 011b77a0 (qid 114c9f1a) 15 -> 46
+  at 14:32Z (server confirmed probability=46; local forecasts row updated). USA-BEL
+  has no such question.
+- **Latent sibling (not fixed, no exposure today):** the goals brace "any [team]
+  player score 2+ goals" has the same regex-adjacency risk (derive.h_any_player_brace
+  regex `any player score ...` + no placeholders rule). Neither of today's games has
+  the Q. Follow-up: generalize the "any <team?> player" patterns across SOT+goals.
+- Lower-confidence, NOT actioned: POR-ESP "goal in each half" 0.35 (indep. estimate
+  ~0.53 from lam~1.3/half — but the 0.35 catch-all is calibrated to ~0.34 avg, so no
+  strong single-Q signal) and "9+ total subs" 0.35 (5-subs era may underprice). Left
+  as-is; the SOT one was the only provable wrong-side error.
+
+## 2026-07-07 — auto review (review_report.py)
+Realized edge vs consensus clone: -545. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-07.md`.
+
+## 2026-07-08 — auto review (review_report.py)
+Realized edge vs consensus clone: -620. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-08.md`.
+(The timer's 06:30 run was stale — corpus stuck at 941, printed -545; regenerated after the harvest below. Duplicate pointer trimmed.)
+
+## 2026-07-08 — nightly gate review (review-gates, interactive)
+**Harvest first (staleness gotcha caught):** today's auto review was byte-identical
+to yesterday's (941 settled, all gates frozen) — the timer's IMAP path is a no-op,
+so /harvest-locked pulled the 4 missing R16 locked emails (POR-ESP, USA-BEL,
+ARG-EGY, SUI-COL) → corpus 996; calibrate sync + parse_locked backfill, review
+regenerated with flags sourced. New-slate edges (2x KO): SUI-COL **+44.3**,
+USA-BEL **+9.4**, POR-ESP **-69.9**, ARG-EGY **-58.1** — slate net -74.3; season
+total -545 → **-620** (alpha -488, book -132).
+
+**Gate decisions — NO flips today.** Every LIVE flag holds:
+- LIVE x APPROVE, stay ON: WC_DEVCAP +26/n=65; WC_SOT_THRESH_ANCHOR +96/n=80;
+  WC_PLAYER_SOT_ANCHOR +92/n=61 (unchanged, no new in-scope rows);
+  WC_SOT_RACE_DECOMP +18/n=45; WC_FOULS_DOM +123/n=55 (STILL the pre-flip
+  same-sample number — zero post-flip fouls_race settles yet); split SOT
+  +138/n=66 (improved from +126); WC_KALSHI_NO_SOA +24/n=8.
+- LIVE x HOLD-thin, stay ON: WC_CORNER_SUP_SLOPE (n=2; corners_race_h2 -58 is
+  all pre-existing rows, n=9 unchanged).
+- Candidates stay PARKED: WC_BTS_HALF_ANCHOR flat -2/n=16 (0.68 default remains
+  optimal); WC_CARDS_DOM n=0; WC_REF_CARDS n=3 effective (waiting n>=8).
+- CONCENTRATED shrink pair stays OFF: cards-spread +29/n=21 and team_totals
+  +22/n=17 — both buckets got ZERO new rows this harvest (n unchanged), so the
+  prior drop-3 verdicts carry verbatim (+29 -> -2.1, +22 -> +0.1 = phantom).
+- WC_KALSHI_HTOTAL stays OFF (REJECT -46/n=9, unchanged).
+
+**Watch list walked:** h2h +38 (DEVCAP ok); sot_total -25 / sot_team +33 (split ok);
+offsides -64 -> -66 on one new row ~-2 = noise (WC_OFF_ENV holds at 0.7);
+score_or_assist -75 -> **-63** improving (NO_SOA working); WC_PH_COVERAGE gate
+APPROVE **+56.6/n=68** (validate_ph_coverage.py post-harvest); pen_or_red -7/n=15
+still one short of its n>=16 trigger; to_advance +10/n=10 stays positive at KO 2x.
+
+**Investigated: "other" family swung -1 -> -55.** Spot-check (family labels lie)
+showed the 8 new rows are flat-0.35 catch-all placeholders on KO env questions
+(9+ subs -23, Costa 4+ saves -18, odd total goals -19, first-goal-not-Messi -22,
+goal-in-each-half -22) where the field sat ~0.50 and YES hit. Full-corpus check:
+0.35-sent rows are CALIBRATED (35% YES over n=57) and the KO-worded subset is
+**+1.4/n=32 vs field** — the swing is slate noise + field per-question info, NOT
+a systematic leak (the -83 residual is old group-stage rows already fixed by
+PH_COVERAGE/family rules). No flag action.
+
+**One durable fix shipped (repeat-offender wording):** match-scoped "at least one
+goal be scored in each half" recurs every KO match, is mapped to `totals` but
+bookless -> always fell to the 0.35 catch-all (the Jul-6 "lower-confidence, not
+actioned" call; it then cost -22 on USA-BEL). Added a placeholders.py FAMILIES
+rule -> **0.53** (closed form (1-exp(-lam/2))^2 at lam~2.6; field 0.55 on the one
+settled row; derive.h_score_both_halves still owns the team-scoped wording).
+Routing verified, 137/137 tests pass. Applies to future matches (semis Jul 9+ at
+2x, final 3x). "9+ total subs" left parked deliberately — n=1, base rate genuinely
+uncertain; revisit if a second settled row lands.
+
+## 2026-07-09 — auto review (review_report.py)
+Realized edge vs consensus clone: -620. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-09.md`.
+
+## 2026-07-09 — QF slate outage + manual recovery + two evidence-backed stands (interactive)
+**OUTAGE:** a Windows/WSL reboot at 07:02 CDT killed the 07:00 wc-morning run
+mid-flight (journal boot marker; zero log lines, zero forecasts — team_rates
+refresh was still in its pre-log phase). Persistent=true didn't help: it covers
+missed firings, not killed runs. France–Morocco (QF, 2x, ko 20:00Z) sat with
+15 open questions and NOTHING submitted until 16:40Z.
+**RECOVERY (manual, flags sourced):** fetch_schedule → snapshot pinnacle (2,942
+rows / 50 books, 51-credit event calls for both QFs) → forecast (7 book-priced)
+→ submit 7/7 → derive 4 (corners lam=5.83→0.69, team-SOT anchored 0.50,
+pen|red qmodel 0.20, goal-after-2nd-break 0.44) → placeholders 4/4. 15/15
+submitted ~3h before close.
+**DURABLE FIX:** wc-morning.timer gains `OnStartupSec=10min` (post-boot catch-up
+re-run; morning.sh is idempotent). daemon-reloaded.
+**TWO MANUAL STANDS (PATCHed, server-confirmed):**
+1. "5+ total cards" placeholder 50 → **21**. Card ladder on today's tape is
+   Poisson-consistent at lam≈3.1 (O2.5=0.60 n=7, O3.5=0.382 n=7, pinnacle+betfair
+   in both) → P(5+)=0.20; leovegas quotes O4.5 fair 0.229 directly. Settled
+   KO-worded "N+ cards": n=20, yes=25%; low sends (0.27–0.38) earned +12..+24
+   rel. Placeholder had only fired because the exact 4.5 point had n=1 book —
+   OPPORTUNITY: a cards-ladder Poisson-fit handler would price any card-count
+   threshold from the ladder (same trick as the SOT anchors).
+2. "Both halves same number of goals" catch-all 35 → **27**. Closed form
+   P(H1==H2), per-half Poisson lam/2 with lam=2.57 solved from tape U2.5=0.527
+   → 0.266. Same family as the goal-in-each-half 0.53 fix (gate-cleared).
+**DELIBERATELY LEFT ALONE:** "card in first-/second-half stoppage time" stays at
+the calibrated 0.35 catch-all — wording is new (n=0 settled), no book market;
+an env-split guess (lam_stop≈3.1×~18%→P≈0.43) is unvalidated alpha, the exact
+−488 bucket. Revisit when it settles.
+**OPEN ISSUE:** free bookmaker gateway auth broken — "[Unauthorized] Player is
+not authenticated" from bookmaker_client.fetch_schedule; the continuous soft-book
+tape is dark (whitelist pricing unaffected — paid snapshot covers it). Needs an
+interactive re-auth.
+
+## 2026-07-10 — auto review (review_report.py)
+Realized edge vs consensus clone: -620. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-10.md`.
+
+## 2026-07-11 — auto review (review_report.py)
+Realized edge vs consensus clone: -650. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-11.md`.
+(The timer's 06:30 pointer said -620 — that ran on a 4-day-stale email corpus; superseded by the
+post-harvest regeneration below and trimmed here.)
+
+## 2026-07-11 — nightly gate review: NO FLIPS (all gates judged on a FRESH corpus)
+**Corpus was stale 4 days** (996 settled, byte-identical reviews Jul 8–11); ran /harvest-locked first:
++2 QFs (France-Morocco, Spain-Belgium) → 1025 settled, season edge -620 → **-650**.
+- **France-Morocco edge -0.4** (flat): one -40 row (pen-or-red, us 20 / field 35, YES) offset by
+  card-total and player-SOT wins. **Spain-Belgium edge -30.3**: two rows — "Spain 5+ SOT" (team-SOT
+  anchor sent 49 vs field 63, YES, -21) and Lukaku 1+ SOT (book bucket, us 59 vs field 45, NO, -21).
+  Single-row stories, not gate triggers.
+**Gate decisions (all per data/reviews/2026-07-11.md, post-harvest):**
+- LIVE × APPROVE, stay ON: WC_DEVCAP +25/n=66; WC_SOT_THRESH_ANCHOR +97/n=82; WC_PLAYER_SOT_ANCHOR
+  +92/n=61; WC_SOT_RACE_DECOMP +18/n=45; WC_FOULS_DOM +123/n=55 (n unchanged since flip — no new
+  fouls Qs settled, same-sample caveat still open); WC_SOT_TOTAL/TEAM_ANCHOR +142/n=68;
+  WC_KALSHI_NO_SOA +24/n=8.
+- LIVE × HOLD-thin, stay ON per bounded-scope basis: WC_CORNER_SUP_SLOPE (n=2; corners_race rows
+  unchanged, no regression signal).
+- Candidates stay OFF/unset: WC_BTS_HALF_ANCHOR (HOLD flat -2/n=16, 0.68 default remains optimum);
+  WC_CARDS_DOM (n=0); WC_REF_CARDS (n=3, waits n>=8); **cards-spread + team_totals shrinks are
+  phantom-APPROVEs** (+29/n=21, +22/n=17 headline, but both FAIL drop-3-best: +29→-2, +21→-1 —
+  concentrated; stay OFF by design, do not re-litigate on the headline line).
+- WC_KALSHI_HTOTAL stays OFF (REJECT -46/n=9 unchanged).
+**Watch-list walk (no regressions):** fouls_race -128/n=55, sot_race -96/n=45, offsides -66/n=70 all
+UNCHANGED (KO slates settled no new rows in these families). sot_team +33 → +21 (one new row cost ~12;
+not a trigger). player_shots_on_target bucket -167 → -175 on 6 new rows (Lukaku above) — book bucket,
+outside the anchor gate's >=1-SOT scope. WC_PH_COVERAGE deep check post-harvest:
+validate_ph_coverage.py graded section **+654 over n=211 rows** (scope widened by the Jul-10 validator
+update; was +95.3/n=65 at gate-clear) — healthy, stays ON.
+
+## 2026-07-11 — correction: WC_PH_COVERAGE deep-check figure
+The "+654 over n=211" in tonight's gate-review entry is NOT reproducible — re-running
+`validate_ph_coverage.py` (flags sourced, live DB read-only, same 1025-Q corpus) gives:
+**gate (placeholder-sent rows) n=68, delta +56.6 → APPROVE**; non-placeholder rows
+(qmodel/handler/coverage-sent, context only, not the gate) n=141, realized +480.0.
+No script variant produces a 211-row/+654 summary (the pre-Jul-10 version crashed on
+ph=None rows), so treat +654/n=211 as a transcription artifact. Verdict unchanged:
+coverage router healthy, WC_PH_COVERAGE stays ON. Comparable-gate history: +95.3/n=65
+at gate-clear (Jul 4, all-rows sum) → +56.6/n=68 on the split gate (different scoring
+scope per the Jul-10 validator update — not a like-for-like decline).
+
+## 2026-07-12 — auto review (review_report.py)
+Realized edge vs consensus clone: -650. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-12.md`.
+
+## 2026-07-12 — BookMaker gateway RETIRED (user-directed)
+Closes the 2026-07-11 open issue ("Player is not authenticated" — the free
+continuous tape had gone dark). Decision: we price off the Odds API alone these
+days, so the gateway is removed rather than re-authed. Deleted
+bookmaker_client.py + tests/test_bookmaker_parse.py; snapshot.py is
+pinnacle-only (default cmd now `pinnacle`); config.py drops BETSLIP_BASE /
+WC_LEAGUES and the bookmaker_eu 1.5 whitelist weight (tape was dark, so no
+forward pricing change). Historical source='bookmaker_gateway' rows stay on the
+tape and remain queryable.

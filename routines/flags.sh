@@ -89,7 +89,8 @@ export WC_FOULS_DOM=0.15
 # With this ON the family falls through to the book-union h_score_or_assist
 # (whose KO name-matching bug is fixed — derive now uses _player_tokens) or the
 # 0.24 family placeholder. Gate thin (n=5, +28) but the defect is structural:
-# a wide-spread mid is not a probability. ENABLED 2026-07-01.
+# a wide-spread mid is not a probability. ENABLED 2026-07-01. Gate cleared
+# MIN_N 2026-07-04: +24/n=8 APPROVE (was thin n=5 at flip).
 export WC_KALSHI_NO_SOA=1
 # Corner-race supremacy-fallback slope (2026-07-01): the fallback (used only
 # when NO corner-spread ladder is quoted) capped its tilt at ±0.10 while
@@ -174,6 +175,9 @@ export WC_TO_ADVANCE_H2H=1
 # the KO multiplier. WATCH: run validate_ph_coverage.py after each /harvest-locked once
 # these settle, and the coverage bucket in parse_locked — flip OFF if it regresses (esp.
 # ahead-HT, which moves AWAY from the crowd toward the sharp h1 market). 66/66 tests pass.
+# GATE CLEARED 2026-07-04 (first settled-data confirmation): validate_ph_coverage.py
+# on settled+field rows = coverage vs placeholder +95.3 over n=65 -> APPROVE
+# (script's ph=None crash fixed same day; non-placeholder-sent rows excluded from the gate).
 export WC_PH_COVERAGE=1
 # Spread-aware Kalshi SOA (2026-07-02, refines WC_KALSHI_NO_SOA): Kalshi SOA is
 # a TWO-SIDED exchange book — tight books (stars, ~1-4c) are a real crowd
@@ -201,5 +205,13 @@ export WC_PH_COVERAGE=1
 # (w=0.7 prices ~55/N3, ~43/N4 vs field ~49) and replaces a diagnosed
 # artifact (flat 0.35 / stale-data counted). w=0.7 not 1.0: the grid is
 # monotone to the edge — don't chase it. WATCH the offsides family row
-# nightly; pull toward 0 if the match-total rows regress.
+# nightly; pull toward 0 if the match-total rows regress. Verified scoring
+# 2026-07-04: 'env-blend w=0.7' tag on submitted forecasts (Jul 3 + Jul 4);
+# offsides family -42 -> -38 on day 1. 2026-07-05 stress test PASSED: the
+# family's -38 -> -64 swing was ONE row (COL-GHA 3+ offsides, sent 0.78, NO,
+# rel -46) but the flag BEAT its counterfactual there — fresh counted sum ~5.7
+# (Colombia counted 3.07/match, no data bug; mean normal at 1.71) would have
+# sent ~0.88 = rel ~-63; env pulled it to 0.78, +17 vs counted. Loss belongs
+# to the counted layer, not the blend. Same-sample tally ~+75/n=8, drop-2
+# ~+27. LESSON: judge this flag env-vs-counted, NOT by the family row alone.
 export WC_OFF_ENV=0.7

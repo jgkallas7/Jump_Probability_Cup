@@ -104,6 +104,22 @@ FAMILIES = [
     # derive.h_score_both_halves and never reaches here.
     (r"(?:at least one|a|1(?: or more)?) goals? be scored in each half", 0.53,
      "goal in each half of regulation ~0.53 (was 0.35)"),
+    # --- late-KO novel wordings, first seen France-Spain SF 2026-07-14 (all fell
+    # --- to the 0.35 unclassified fallback; final is 3x so name them now).
+    # A two-sided race (someone always subs first; simultaneous resolved by rule)
+    # — a ~0.5 event, NOT a 0.35 prop. Field 0.54 on the one asked.
+    (r"make the first substitution", 0.50,
+     "first-substitution race — two-sided, ~coin flip (was 0.35)"),
+    # coverage handler h_goal_between_breaks preempts when a totals tape exists;
+    # this is tape-less insurance. Window carries ~56% of goals -> math says
+    # ~0.75 at tournament lambda, field sat 0.61 (settled YES, n=1); 0.60 is the
+    # conservative insurance value pending more settles.
+    (r"after the first hydration break but before the second", 0.60,
+     "goal in mid-window ~30'-75' (was 0.35; field 0.61, YES n=1)"),
+    (r"on-field review|VAR monitor", 0.35,
+     "VAR on-field review env base — no data source; field 0.42, NO n=1"),
+    (r"single-digit shirt number|shirt number|jersey number", 0.35,
+     "first-goal scorer shirt-number prop — field 0.35, NO n=1"),
     (r"", 0.35, "unclassified fallback — realized 0.34 over n=32 settled (non-SOT residual)"),
 ]
 

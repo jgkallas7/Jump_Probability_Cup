@@ -855,3 +855,85 @@ pinnacle-only (default cmd now `pinnacle`); config.py drops BETSLIP_BASE /
 WC_LEAGUES and the bookmaker_eu 1.5 whitelist weight (tape was dark, so no
 forward pricing change). Historical source='bookmaker_gateway' rows stay on the
 tape and remain queryable.
+
+## 2026-07-13 — auto review (review_report.py)
+Realized edge vs consensus clone: -650. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-13.md`.
+
+## 2026-07-14 — auto review (review_report.py)
+Realized edge vs consensus clone: -650. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-14.md`.
+
+
+## 2026-07-15 — nightly gate review (interactive, /review-gates)
+Corpus was STALE (1025 settled, newest email Jul 10) — Jul 13/14 auto-reviews
+graded nothing new; ran /harvest-locked first (+3 emails: Norway-England QF,
+Argentina-Switzerland QF, France-Spain SF), then regenerated. 1065 settled,
+season edge -650 -> **-531** (+119.7 across the 3 new KO matches;
+Argentina-Switzerland +88.1 is the best single-match edge of the tournament,
+France-Spain -2.8 ~flat).
+
+**Decisions (no flips):**
+- All LIVE flags gate APPROVE and stay ON: WC_DEVCAP +26/n=67,
+  WC_SOT_THRESH_ANCHOR +95/n=85, WC_PLAYER_SOT_ANCHOR +92/n=61,
+  WC_SOT_RACE_DECOMP +18/n=45, WC_FOULS_DOM +123/n=55 (same-sample argmax,
+  family row static at -128 — no new fouls Qs settled),
+  WC_SOT_TOTAL/TEAM_ANCHOR +156/n=71 (growing: was +142/n=68; sot_team family
+  +21 -> +42), WC_KALSHI_NO_SOA +24/n=8 (score_or_assist family -59 -> -42).
+- **cards-spread shrink + team_totals shrink: APPROVE but NOT flipped** —
+  both CONCENTRATED; review_report's own drop-3-best sensitivity kills them
+  (+29 -> -2 and +21 -> -1). Phantom-APPROVEs per the WC_REF_CARDS precedent;
+  stay OFF until the gain survives drop-3.
+- HOLD-thin, parked: WC_CORNER_SUP_SLOPE (n=2), WC_CARDS_DOM (n=0),
+  WC_REF_CARDS (n=3, waiting n>=8), WC_BTS_HALF_ANCHOR (flat -2/n=16, stays
+  unset at 0.68 default). WC_KALSHI_HTOTAL REJECT -46/n=9 — already OFF,
+  consistent.
+
+**Watch-list walk:**
+- WC_PH_COVERAGE: validate_ph_coverage gate APPROVE +56.6/n=68, stays ON —
+  but SOFTENING (was +95.3/n=65 on Jul 4; ~-39 over 3 new gate rows). If the
+  next harvest drops it below ~+30 or the delta/row stays negative, re-open.
+- WC_OFF_ENV: offsides family -66 -> -74 is ONE new row (France-Spain 4+
+  combined offsides, sent 0.43 env-blend lam=3.34, outcome YES). Env-vs-
+  counted: counted-only lam~3.05 -> ~0.37, so the blend beat its
+  counterfactual again (+ toward outcome). Loss belongs to the counted
+  layer; keep w=0.7.
+- sot_race -96, corners_race h1/h2, hydration -16 -> -31 (n=20, placeholder-
+  adjacent wording): no LIVE flag regressed vs its counterfactual.
+
+Final + 3rd-place remain (2x/3x multipliers): the KO-calendar stage fallback
+covers them; WC_TO_ADVANCE_H2H n/a (no advance Qs left after SF settle).
+
+## 2026-07-15 — auto review (review_report.py)
+Realized edge vs consensus clone: -508. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-15.md`.
+
+## 2026-07-15 (later same day) — parse_locked extractor bug + France-Spain correction + late-KO coverage
+User flagged France-Spain looked wrong (they saw ~+150 vs field; we graded
+edge -2.8 on n=11). ROOT CAUSE: late-slate locked emails append a resolution
+clarification AFTER the "?" on the same line ("...)? If both teams substitute
+simultaneously, ..."); parse_locked.extract's endswith("?") predicate dropped
+those rows — 3 of France-Spain's 15 (first-sub race, VAR review, shirt-number
+first-goal), ALL settled NO with us under the field, i.e. all wins (~+37/+20/+6
+rel). FIX: any line containing "?" is a candidate; the 5-number tail validation
+is the real filter; full line kept (matches questions.text exactly). Corpus
+1090 -> 1093 rows, no spurious matches; regression test tests/test_parse_locked.py.
+CORRECTED: France-Spain n=14 edge **+19.5** (ours +113.5 / clone +94.0); season
+edge **-508** (the -531 in this morning's entry above understated us by ~23).
+
+Placeholder follow-up (user: "France-Spain had a lot of placeholders" — true,
+5/15): shipped under existing WC_PH_COVERAGE + placeholder-family mechanisms
+(same basis as the Jun-29 KO gap handlers; final is 3x on Jul 19):
+- "tied at the end of regulation ... extra time" -> h_ends_in_tie (h2h draw
+  devig; we'd sent the 0.33 family base while the same match's devig said
+  0.317 — right number, wrong path).
+- NEW h_goal_between_breaks: goal in the ~30'-75' window off match lambda,
+  share 1-0.21-0.23=0.56 (partitions with the validated before/after handlers).
+  France-Spain would have derived 0.78 vs flat 0.35 sent (field 0.61, YES).
+- placeholders.py named families: first-sub race 0.50 (two-sided race — the
+  0.35 catch-all was structurally wrong-side), VAR review 0.35, shirt-number
+  0.35, mid-window insurance 0.60. All n=1 evidence, labeled as such; value is
+  correct structure + trackability, not calibration claims.
+- tests: COVERAGE_HANDLERS positional indexing in test_ph_coverage.py replaced
+  with fn-based lookup (_cov_pattern) — inserting handlers no longer breaks
+  tests. 139 pass.
+Tonight's SF (Eng-Arg) has NONE of the novel wordings — this targets the
+final/3rd-place. WATCH: coverage bucket via validate_ph_coverage after the
+next harvest (gate currently APPROVE +56.6/n=68 and softening — see above).

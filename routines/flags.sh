@@ -178,6 +178,9 @@ export WC_TO_ADVANCE_H2H=1
 # GATE CLEARED 2026-07-04 (first settled-data confirmation): validate_ph_coverage.py
 # on settled+field rows = coverage vs placeholder +95.3 over n=65 -> APPROVE
 # (script's ph=None crash fixed same day; non-placeholder-sent rows excluded from the gate).
+# 2026-07-15 re-check: still APPROVE but SOFTENING — +56.6 over n=68 (~-39 across
+# 3 new gate rows since Jul 4). Stays ON; re-open if the next harvest drops the
+# gate below ~+30 or the per-row delta stays negative.
 export WC_PH_COVERAGE=1
 # Spread-aware Kalshi SOA (2026-07-02, refines WC_KALSHI_NO_SOA): Kalshi SOA is
 # a TWO-SIDED exchange book — tight books (stars, ~1-4c) are a real crowd

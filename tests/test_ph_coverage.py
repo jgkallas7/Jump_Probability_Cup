@@ -34,6 +34,11 @@ def test_brace_classifies_no_market_not_totals():
     assert classify("Will the match have 3 or more total goals?")[1] == "totals"
 
 
+def _cov_pattern(fn):
+    """Look up a COVERAGE_HANDLERS pattern by its handler fn (order-independent)."""
+    return next(p for p, f in derive.COVERAGE_HANDLERS if f is fn)
+
+
 # ---- tie -> h2h draw ----
 
 def test_ends_in_tie_prices_from_h2h_draw():
@@ -41,7 +46,7 @@ def test_ends_in_tie_prices_from_h2h_draw():
     now = datetime.now(timezone.utc)
     _snap(conn, "h2h", "Draw", None, 0.28)
     m = {"match_id": "M1", "home": "South Africa", "away": "Canada"}
-    g = re.search(derive.COVERAGE_HANDLERS[0][0],
+    g = re.search(_cov_pattern(derive.h_ends_in_tie),
                   "Will regulation (90 minutes + stoppage time) end in a tie?")
     assert g is not None
     p, tier, _ = derive.h_ends_in_tie(m, g, conn, now)
@@ -62,7 +67,7 @@ def test_ahead_at_halftime_prices_from_h1_3way():
     now = datetime.now(timezone.utc)
     _snap(conn, "h2h_3_way_h1", "Canada", None, 0.31)
     m = {"match_id": "M1", "home": "South Africa", "away": "Canada"}
-    g = re.search(derive.COVERAGE_HANDLERS[1][0], "Will Canada be ahead at halftime?")
+    g = re.search(_cov_pattern(derive.h_ahead_at_halftime), "Will Canada be ahead at halftime?")
     assert g is not None
     p, tier, _ = derive.h_ahead_at_halftime(m, g, conn, now)
     assert abs(p - 0.31) < 1e-9 and tier == "derived"
@@ -77,7 +82,7 @@ def test_any_player_brace_sane_range():
     _snap(conn, "totals", "Under", 2.5, 0.58)
     _snap(conn, "h2h", "South Africa", None, 0.34)
     m = {"match_id": "M1", "home": "South Africa", "away": "Canada"}
-    g = re.search(derive.COVERAGE_HANDLERS[2][0],
+    g = re.search(_cov_pattern(derive.h_any_player_brace),
                   "Will any player score more than 1 goal (excluding own goals)?")
     assert g is not None
     p, tier, _ = derive.h_any_player_brace(m, g, conn, now)
@@ -307,3 +312,60 @@ def test_sub_before_half_base():
     assert g is not None
     p, tier, _ = derive.h_sub_before_half(m, g, conn, now)
     assert abs(p - 0.22) < 1e-9 and tier == "base"
+
+
+# ---- late-KO novel wordings (France-Spain SF 2026-07-14) ----
+
+def test_tied_at_end_of_regulation_routes_to_h2h_draw():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    _snap(conn, "h2h", "Draw", None, 0.317)
+    m = {"match_id": "M1", "home": "France", "away": "Spain"}
+    text = ("Will the match be tied at the end of regulation (90 minutes + "
+            "stoppage time) and go to extra time?")
+    fn = next(f for p, f in derive.COVERAGE_HANDLERS if re.search(p, text))
+    assert fn is derive.h_ends_in_tie
+    p, tier, _ = fn(m, re.search(_cov_pattern(fn), text), conn, now)
+    assert abs(p - 0.317) < 1e-9 and tier == "derived"
+
+
+def test_goal_between_breaks_window_math():
+    conn = dbmod.init(":memory:")
+    now = datetime.now(timezone.utc)
+    _snap(conn, "totals", "Under", 2.5, 0.45)   # lively match, lam ~2.7
+    m = {"match_id": "M1", "home": "France", "away": "Spain"}
+    text = ("Will a goal be scored after the first hydration break but before "
+            "the second hydration break?")
+    fn = next(f for p, f in derive.COVERAGE_HANDLERS if re.search(p, text))
+    assert fn is derive.h_goal_between_breaks
+    g = re.search(_cov_pattern(fn), text)
+    p, tier, _ = fn(m, g, conn, now)
+    # window share = 1 - 0.21 - 0.23 = 0.56 of the match lambda
+    import math
+    _, _, lt = derive.match_lambdas(conn, m, now)
+    assert abs(p - (1 - math.exp(-lt * 0.56))) < 1e-9 and tier == "derived"
+    # the mid-window must be the most likely of the three break windows
+    g_pre = re.search(_cov_pattern(derive.h_goal_before_hydration),
+                      "Will a goal be scored before the first hydration break?")
+    p_pre, _, _ = derive.h_goal_before_hydration(m, g_pre, conn, now)
+    g_post = re.search(_cov_pattern(derive.h_goal_after_2nd_break),
+                       "Will a goal be scored after the second hydration break?")
+    p_post, _, _ = derive.h_goal_after_2nd_break(m, g_post, conn, now)
+    assert p > p_pre and p > p_post
+
+
+def test_novel_prop_placeholder_families():
+    from placeholders import placeholder_for
+    p, why = placeholder_for(
+        "Will Spain make the first substitution of the match in regulation "
+        "(90 minutes + stoppage time)?")
+    assert p == 0.50 and "race" in why
+    p, why = placeholder_for(
+        "Will the referee conduct an on-field review at the pitchside VAR "
+        "monitor at any point in regulation (90 minutes + stoppage time)?")
+    assert p == 0.35 and "VAR" in why
+    p, why = placeholder_for(
+        "Will the first goal of the match (including extra time, excluding "
+        "penalty shootout) be scored by a player wearing a single-digit shirt "
+        "number (1-9)?")
+    assert p == 0.35 and "shirt" in why

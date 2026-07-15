@@ -1085,6 +1085,18 @@ def h_goal_after_2nd_break(m, g, conn, now):
     return 1 - math.exp(-lam), "derived", f"goal-after-2nd-break lam={lam:.2f}"
 
 
+def h_goal_between_breaks(m, g, conn, now):
+    """'Will a goal be scored after the first hydration break but before the
+    second?' — the ~30'-75' window. Shares partition regulation goals with the
+    before-30 (0.21) and after-75 (0.23) handlers, so the window carries the
+    remaining 0.56. First seen France-Spain SF 2026-07-14 (fell to the 0.35
+    unclassified placeholder, field 0.61, settled YES)."""
+    _, _, lt = match_lambdas(conn, m, now)
+    share = 1 - BASE["goal_share_first30"] - BASE["goal_share_after75"]
+    lam = lt * share
+    return 1 - math.exp(-lam), "derived", f"goal-between-breaks lam={lam:.2f}"
+
+
 def h_clean_sheet(m, g, conn, now):
     """'Will X keep a clean sheet?' — P(opponent scores 0) = exp(-lam_opp) off
     the market goal lambdas. Argentina-Cabo Verde (2026-07-03) went out as an
@@ -1108,6 +1120,15 @@ def h_sub_before_half(m, g, conn, now):
 # Tried as a FALLBACK only (after qmodel + HANDLERS), and only when PH_COVERAGE_ON.
 COVERAGE_HANDLERS = [
     (r"(?:regulation|the match|match).*end in a tie|end in a tie", h_ends_in_tie),
+    # KO "tied at the end of regulation ... and go to extra time" IS the match
+    # draw (a KO regulation draw always goes to ET) — same event h_ends_in_tie
+    # already prices. France-Spain SF sent the 0.33 family base while the same
+    # match's h2h devig had Draw=0.317 — right number, wrong path.
+    (r"tied at the end of regulation", h_ends_in_tie),
+    # must precede the before-1st/after-2nd break patterns (distinct literals,
+    # but the window wording contains both "first" and "second")
+    (r"goal.*after the first hydration break but before the second",
+     h_goal_between_breaks),
     (r"[Ww]ill (.+?) be (?:ahead|leading|in front) at halftime", h_ahead_at_halftime),
     (r"any player score (?:more than (?:1|one)|2 or more) goals?",
      h_any_player_brace),

@@ -57,11 +57,15 @@ def extract(path: str) -> list[dict]:
         return []
     lines = lines[start:]
 
+    # A question line usually ends with "?", but late-slate emails append a
+    # resolution clarification after it on the same line ("...stoppage time)?
+    # If both teams substitute simultaneously, ..."). Treat any line containing
+    # "?" as a candidate; the 5-number tail validation below is the real filter.
     rows, i = [], 0
     while i < len(lines):
-        if lines[i].endswith("?"):
+        if "?" in lines[i]:
             q, nums, j = lines[i], [], i + 1
-            while j < len(lines) and len(nums) < 5 and not lines[j].endswith("?"):
+            while j < len(lines) and len(nums) < 5 and "?" not in lines[j]:
                 nums.append(lines[j]); j += 1
             if (len(nums) >= 5 and _PCT.match(nums[0]) and _PCT.match(nums[1])
                     and _FLT.match(nums[2]) and _FLT.match(nums[3])):

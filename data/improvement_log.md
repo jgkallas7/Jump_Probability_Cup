@@ -902,8 +902,6 @@ France-Spain -2.8 ~flat).
 Final + 3rd-place remain (2x/3x multipliers): the KO-calendar stage fallback
 covers them; WC_TO_ADVANCE_H2H n/a (no advance Qs left after SF settle).
 
-## 2026-07-15 — auto review (review_report.py)
-Realized edge vs consensus clone: -508. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-15.md`.
 
 ## 2026-07-15 (later same day) — parse_locked extractor bug + France-Spain correction + late-KO coverage
 User flagged France-Spain looked wrong (they saw ~+150 vs field; we graded
@@ -937,3 +935,44 @@ Placeholder follow-up (user: "France-Spain had a lot of placeholders" — true,
 Tonight's SF (Eng-Arg) has NONE of the novel wordings — this targets the
 final/3rd-place. WATCH: coverage bucket via validate_ph_coverage after the
 next harvest (gate currently APPROVE +56.6/n=68 and softening — see above).
+
+## 2026-07-15 — auto review (review_report.py)
+Realized edge vs consensus clone: -508. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-15.md`.
+
+
+## 2026-07-16 — auto review (review_report.py)
+Realized edge vs consensus clone: -547. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-16.md`.
+
+## 2026-07-15 evening — gate review after Eng-Arg harvest (interactive, /review-gates)
+Harvested the England-Argentina SF locked email (all 15 rows extracted — the
+morning parser fix holding). Rough match: edge **-38.3** (ours +13.5 / clone
++51.8); season -508 -> **-547**. Review regenerated (dated 2026-07-16, UTC).
+
+**Decisions — no flips; one scope-hole fix on a LIVE flag:**
+- All LIVE flag gates unchanged from this morning (Eng-Arg barely touched
+  their scopes); all stay ON.
+- **cards-spread shrink: still phantom** — fresh drop-3: +29.2 -> -2.1. OFF.
+- **team_totals shrink: HOLD despite gate APPROVE +31/n=18** — drop-N curve
+  +31.3/+22.1/+13.6/+6.5/+0.1/-5.0 (dies at drop-4; top-4 rows carry ~25 of
+  31 pts; 11/18 rows helped). Tonight's single new row is what pushed drop-3
+  positive — that's the concentration failure mode, not broadening. With the
+  blanket-shrink dead-end on record, not shipping a new knob on this.
+- **sot_total -25 -> -65 root-caused: anchor SCOPE HOLE, not the anchor.**
+  'N or more total SOT (both teams combined)' was mis-excluded from
+  is_sot_threshold by the blanket 'both teams' test (meant for the each-team
+  >=1 family) — Eng-Arg went out un-anchored at counted 0.86 (lam=11.1),
+  realized -75 on the row; 0.78-anchor would have sent 0.82. FIXED (exclusion
+  now requires 'combined' absent); 1 historical row affected; live + gate
+  share is_sot_threshold so both widened together. Gate with widened scope:
+  thresh +102/n=86, split +149/n=72 — still APPROVE. Regression test added
+  (tests/test_sot_anchor.py). 140 tests pass.
+
+**Watch-list walk:**
+- WC_PH_COVERAGE: gate REBOUNDED +56.6/n=68 -> **+94.4/n=70** — this
+  morning's softening was noise. Watch note updated in flags.sh.
+- score_or_assist improved -42 -> -35 (WC_KALSHI_NO_SOA healthy);
+  player_goal_scorer_anytime -25 -> -8. fouls_race/sot_race/offsides/
+  corners_race static (no new rows in scope). pen_or_red -3 -> -14 on one
+  row (n=20, no flag governs it) — noted, no action.
+Next matches: 3rd-place Jul 18, final Jul 19 (3x). No gate day between —
+tonight's decisions stand for the final.

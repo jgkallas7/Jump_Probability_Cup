@@ -176,7 +176,12 @@ def is_sot_threshold(text: str) -> bool:
     t = text.lower()
     if "shot" not in t or "on target" not in t:
         return False
-    if "both teams" in t:                       # already anchored in qmodel.py
+    # 'both teams >=1 SOT each' is qmodel's hand-anchored family — but the KO
+    # wording 'N or more total SOT (both teams combined)' is a SUM, i.e. exactly
+    # the total-SOT threshold this flag exists for. The blanket 'both teams'
+    # exclusion stripped the anchor off it: Eng-Arg SF 2026-07-15 went out
+    # un-anchored at counted 0.86 (lam=11.1), realized -75 on the one row.
+    if "both teams" in t and "combined" not in t:   # each-team event, not a sum
         return False
     return not ("more" in t and "than" in t)    # exclude '...more SOT than...' race
 

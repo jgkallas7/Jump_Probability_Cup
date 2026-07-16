@@ -71,3 +71,22 @@ def test_race_untouched_when_on(monkeypatch):
 def test_none_price_is_passthrough(monkeypatch):
     monkeypatch.setattr(derive, "SOT_THRESH_ANCHOR_ON", True)
     assert derive._apply_sot_anchor(THRESHOLD_TEXTS[0], None) is None
+
+
+def test_both_teams_combined_is_a_total_sot_threshold(monkeypatch):
+    # KO wording 'N or more total SOT (both teams combined)' is a SUM — total-SOT
+    # scope — not the hand-anchored 'both teams >=1 each' family. The blanket
+    # 'both teams' exclusion sent Eng-Arg SF 2026-07-15 out un-anchored at 0.86
+    # (counted lam=11.1), realized -75 on the row.
+    combined = ("Will there be 8 or more total shots on target (both teams "
+                "combined) in regulation (90 minutes + stoppage time)?")
+    assert derive.is_sot_threshold(combined)
+    monkeypatch.setattr(derive, "SOT_THRESH_ANCHOR_ON", True)
+    monkeypatch.setattr(derive, "SOT_TOTAL_ANCHOR", 0.78)
+    p, tier, reason = derive._apply_sot_anchor(
+        combined, (0.86, "qmodel", "total SOT counted lam=11.10"))
+    assert abs(p - (0.5 * 0.86 + 0.5 * 0.78)) < 1e-9
+    assert "sotanchor" in reason
+    # ...and the each-team family stays excluded even with 'combined' absent
+    assert not derive.is_sot_threshold(
+        "Will both teams have at least 1 shot on target in regulation?")

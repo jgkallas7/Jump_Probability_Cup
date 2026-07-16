@@ -70,6 +70,11 @@ export WC_SOT_THRESH_ANCHOR=1
 # 0.85; 0.42 ≈ the 39% base) — same-sample caveat labeled in the gate, so WATCH
 # the nightly verdict + the sot_total/sot_team family rows; pull back if it
 # slides. ENABLED 2026-07-01 (user-directed session flip).
+# 2026-07-15: sot_total family -25 -> -65 was a SCOPE HOLE, not the anchor —
+# 'N+ total SOT (both teams combined)' wording was mis-excluded by the blanket
+# 'both teams' test in is_sot_threshold and went out UN-anchored (Eng-Arg sent
+# counted 0.86, realized -75/row). Fixed same day (combined = a sum = total-SOT
+# scope); gate with widened scope: split +149 over n=72, still APPROVE.
 export WC_SOT_TOTAL_ANCHOR=0.78
 export WC_SOT_TEAM_ANCHOR=0.42
 # Fouls-race game-state tilt (qmodel._foul_dom): the underdog commits more
@@ -181,6 +186,8 @@ export WC_TO_ADVANCE_H2H=1
 # 2026-07-15 re-check: still APPROVE but SOFTENING — +56.6 over n=68 (~-39 across
 # 3 new gate rows since Jul 4). Stays ON; re-open if the next harvest drops the
 # gate below ~+30 or the per-row delta stays negative.
+# 2026-07-15 evening (Eng-Arg harvest): REBOUNDED to +94.4 over n=70 — the
+# softening was noise, not trend. Watch stands as-is.
 export WC_PH_COVERAGE=1
 # Spread-aware Kalshi SOA (2026-07-02, refines WC_KALSHI_NO_SOA): Kalshi SOA is
 # a TWO-SIDED exchange book — tight books (stars, ~1-4c) are a real crowd

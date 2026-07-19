@@ -10,6 +10,7 @@ Fetched 2026-06-10. Quotes are verbatim from the published docs.
 | 2 | Revise until deadline? | **YES.** `PATCH /predictions/{id}` — "the latest value at market close is what gets scored." Markets close "in the last second before matches start." Submit early defaults, revise at T-60 after lineups. |
 | 3 | API / bulk submit? | **YES.** REST API, bearer auth (`sp_live_*`, shown once at creation), `POST /predictions/batch` (1-50, independently validated), 60 req/min per IP, up to 2 bots per account. "Use any tool, model, or bot. We score forecasts, not methods." There is also an MCP server. |
 | 7 | Field-avg Brier per question? | Partially. Relative points formula confirmed: `(field_avg_brier − your_brier) × 100`, multipliers group 1×/elim 2×/final 3×. Whether the per-question field average is published is still unconfirmed — check `GET /results` payload after first settlements. |
+| 7b | Third-place match multiplier? | **2× (elimination), not 3×.** Scoring docs re-fetched 2026-07-16: "Group Stage: 1× • Elimination Rounds: 2× • Final: 3×" — no separate bronze tier, so the bronze final falls under elimination. Matches `config.STAGE_MULTIPLIER` (`third: 2.0`). The 2026-07-16 "The Final is Worth 3x!" newsletter refers to the final only. Definitive per-match confirmation = the ⚡ multiplier banner in the Jul-18 locked email. |
 | — | Submission format | Integers **1-99 inclusive**. One prediction per market per user. ~10 binary markets per match. |
 | — | Question ingest | `GET /events` → `/lobbies` → `/matches` → `/markets` (binary yes/no per match). Clean API ingest; no scraping needed. |
 
@@ -53,6 +54,11 @@ Fetched 2026-06-10. Quotes are verbatim from the published docs.
 - **#1:** 10-week paid fellowship at Jump Trading, Chicago — "help trade a
   $1,000,000 sports-related portfolio."
 - **#2–5:** Apple iPad Pro. **#6–10:** $200 Ticketmaster gift card.
+- **Per-match "Top Forecaster" gift exists** (discovered 2026-07-13 via a
+  "YOU WON THE MATCH" email from jose.medina@sportspredict.com): the #1
+  forecaster on a single match gets a gift. We won it once (Argentina vs
+  Switzerland QF). Separate from the season leaderboard — winnable on any
+  single match regardless of overall rank.
 - Leaderboard is unified humans+bots; bots get a "BOT" label. Extremely
   top-heavy payout → variance-seeking (decorrelated second entry) is +EV
   for P(top finish); a pure consensus-follower converges to field-average

@@ -940,9 +940,6 @@ next harvest (gate currently APPROVE +56.6/n=68 and softening — see above).
 Realized edge vs consensus clone: -508. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-15.md`.
 
 
-## 2026-07-16 — auto review (review_report.py)
-Realized edge vs consensus clone: -547. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-16.md`.
-
 ## 2026-07-15 evening — gate review after Eng-Arg harvest (interactive, /review-gates)
 Harvested the England-Argentina SF locked email (all 15 rows extracted — the
 morning parser fix holding). Rough match: edge **-38.3** (ours +13.5 / clone
@@ -976,3 +973,100 @@ morning parser fix holding). Rough match: edge **-38.3** (ours +13.5 / clone
   row (n=20, no flag governs it) — noted, no action.
 Next matches: 3rd-place Jul 18, final Jul 19 (3x). No gate day between —
 tonight's decisions stand for the final.
+
+## 2026-07-16 — auto review (review_report.py)
+Realized edge vs consensus clone: -547. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-16.md`.
+(Note: same corpus as the 2026-07-15 evening interactive review — the UTC-dated
+regen and this morning's timer wrote the same 1083-question file; duplicate
+pointer line trimmed.)
+
+## 2026-07-16 — gate review (interactive, /review-gates)
+Corpus UNCHANGED since last night's post-harvest review (settled 1083, edge
+-547 — no matches between the Eng-Arg SF and the Jul 18 bronze final), so
+every gate number is identical to the set already adjudicated in the
+2026-07-15 evening entry. **No flips; all standing decisions re-confirmed:**
+- LIVE flags all APPROVE or better on today's file: WC_DEVCAP +26/n=67,
+  WC_SOT_THRESH_ANCHOR +102/n=86 (widened post-scope-fix), split
+  WC_SOT_TOTAL/TEAM_ANCHOR +149/n=72, WC_PLAYER_SOT_ANCHOR +92/n=61,
+  WC_SOT_RACE_DECOMP +18/n=45, WC_FOULS_DOM +123/n=55 (same-sample slope),
+  WC_KALSHI_NO_SOA +24/n=8. WC_CORNER_SUP_SLOPE HOLD-thin n=2. All stay ON.
+- Candidates stay OFF: WC_BTS_HALF_ANCHOR HOLD-flat (-2/n=16, 0.68 remains
+  optimal); WC_CARDS_DOM n=0; WC_REF_CARDS thin n=3 effective (waits n>=8);
+  cards-spread shrink = phantom (drop-3 -> -2.1, last night); team_totals
+  shrink = concentrated (drop-N dies at drop-4, last night). WC_KALSHI_HTOTAL
+  stays 0 (REJECT -46/n=9).
+- Operational check: 35 open Qs = bronze (15, Jul 18) + final (20, Jul 19);
+  none in morning.sh's 30h window yet, so today's empty submit cycle is
+  normal. They enter the window Jul 17/18 — the sot-anchor scope fix
+  (3091728) and h_goal_between_breaks handler get their first live use there.
+- Verification pending: confirm anchor/coverage tags in deviation_reason
+  after the Jul 18 morning run prices the bronze slate (each-team ">=4 SOT"
+  and total-SOT Qs are in it).
+
+**Addendum (user-relayed standings + multiplier check):** UI leaderboard reads
+leader 5110 / us ~2768.14 at 127th (parse_locked cumulative +2936 ≈ 6% high —
+proxy drift noted in memory). Digest emails put KidTwist at 39th–43rd the same
+week — metric/entry ambiguity recorded, not resolved. Bronze-final multiplier
+resolved from re-fetched scoring docs: elimination 2× / final-only 3× — matches
+config.STAGE_MULTIPLIER (third: 2.0, final: 3.0), no code change needed; the
+Jul-18 locked email banner is the definitive confirmation. RULES.md updated
+(row 7b + per-match Top Forecaster gift fact). Overall prizes (top-10) are
+unreachable at either rank reading with 35 Qs left; the live incentive is the
+per-match Top Forecaster gift (won once, Jul 13). Posture for the final = user
+decision; default remains honest consensus.
+
+## 2026-07-17 — auto review (review_report.py)
+Realized edge vs consensus clone: -547. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-17.md`.
+
+## 2026-07-18 — auto review (review_report.py)
+Realized edge vs consensus clone: -547. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-18.md`.
+
+## 2026-07-19 — auto review (review_report.py)
+Realized edge vs consensus clone: -547. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-19.md`.
+
+## 2026-07-19 — auto review (review_report.py)
+Realized edge vs consensus clone: -566. Flag-validation gate + per-bucket edges in `data/reviews/2026-07-19.md`.
+
+## 2026-07-19 — gate review (interactive, /review-gates) + bronze harvest
+Corpus was stale (frozen at 1083 since Jul 15); ran /harvest-locked first:
+bronze final (France-England Jul 18) harvested -> settled 1096, season edge
+-566 (bronze itself: ours +46.25 vs clone +66.05, edge -19.8/n=13).
+**No flips — every gate verdict identical to the already-adjudicated set:**
+DEVCAP +26/n=67, SOT_THRESH +102/n=86, split SOT anchors +149/n=72,
+PLAYER_SOT +92/n=61, SOT_RACE_DECOMP +18/n=45, FOULS_DOM +123/n=55 (same-
+sample), KALSHI_NO_SOA +24/n=8 — all LIVE, stay ON. CORNER_SUP HOLD-thin n=2.
+Candidates stay OFF (BTS_HALF flat, CARDS_DOM n=0, REF_CARDS n=3 eff,
+cards/team_totals shrinks concentrated). KALSHI_HTOTAL stays 0 (REJECT -46).
+**Bronze post-mortem (family-label spot-check):** score_or_assist -35 -> -67
+is ONE row — substitute-SOA placeholder 0.24 resolved YES (-48). Family
+placeholder is VINDICATED across n=5: 20% YES, field avg 0.55, cumulative
++35 — keep 0.24, the field over-prices sub involvement. Second finding:
+"Will France win the third-place match?" went out as flat 0.35 UNCLASSIFIED
+placeholder (won +60.9 by luck — France lost). Same classifier gap sits on
+today's final slate ("Will Argentina win the World Cup?" = 0.35 placeholder
+at 3x) — final-slate review + manual revision decision recorded separately
+below.
+
+## 2026-07-19 — FINAL-slate manual revision (user-directed, applied 6/6)
+User at 126th (2809 pts, leader ~5186) going into the final (Spain-Argentina,
+3x, close 19:00Z); goal = max expected points. Full 20-Q walkthrough: 14
+healthy (book/anchored/flag-governed — untouched; sub-SOA 0.24 placeholder
+KEPT, vindicated +35/n=5 vs field 0.55). Six flat placeholders re-priced from
+markets and PATCHed live at ~13:40Z (server read-back verified):
+- Argentina win the WC: 35 -> 38 (DNB from 52-book h2h .262/.317/.422 — the
+  bronze "win the third-place match" classifier gap repeated on the final)
+- Yamal > Messi SOT (strict): 50 -> 32 (book SOT ladders, lamM 1.71/lamY 1.39)
+- 5+ distinct Spain shooters: 35 -> 85 (sim P=.94 on ~12.9 exp shots, shaded)
+- Penalty scored: 35 -> 18 (tournament env: pens awarded 2/12 settled Qs,
+  pen-or-red 27%/n=44 — strict-VAR low-pen regime; env-level signal)
+- First goal assisted (No if 0-0): 35 -> 48 (P(goal)=.88 x share .55)
+- Either team 2+ same half: 35 -> 40 (per-half Poisson lamA 1.06 / lamS 1.28)
+Survivability verified in code: cmd_revise only PATCHes forecast.run's book
+sheet; derive has no handler for these wordings; placeholders fills
+unsubmitted only -> sentinel cannot claw these back. deviation_reason =
+"manual final-review: ..." on the inserted forecast rows.
+Post-contest lesson for the record: "Will X win the <match/trophy>?" wording
+falls through the classifier to an unclassified 0.35 placeholder (bronze Jul
+18 + final Jul 19, the two highest-multiplier match-winner Qs of the KO) —
+if this bot runs another contest, add a match-winner/trophy handler to
+derive.COVERAGE_HANDLERS routing to h2h / DNB.

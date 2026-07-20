@@ -1070,3 +1070,18 @@ falls through the classifier to an unclassified 0.35 placeholder (bronze Jul
 18 + final Jul 19, the two highest-multiplier match-winner Qs of the KO) —
 if this bot runs another contest, add a match-winner/trophy handler to
 derive.COVERAGE_HANDLERS routing to h2h / DNB.
+
+## 2026-07-20 — SEASON CLOSE: final graded (Spain-Argentina, 3x)
+Final: ours +436.38 vs clone +374.69 = **edge +61.69/n=20 — best match of
+the season**. Season final ledger: ours +3,418.77 / clone +3,923.54 / edge
+-504.77 (book -67.1, alpha -437.6). Final rank 104/~4,000.
+The six manual repricings (2026-07-19 entry): five of six beat the field,
++179.7 combined vs field; vs leaving the placeholders they netted ~+33 —
+distinct-shooters 0.85 alone was worth ~+120 vs the 0.35 flat (settled YES,
+field 0.40); Yamal>Messi lost -15.6 (Yamal out-SOT'd Messi; field 0.45 vs
+our 0.32). Sub-SOA hold (+45.2), offsides env-blend (+41.7), and the
+Argentina 4+ SOT anchor (+49.5) all cashed. Field over-priced events across
+the board in a low-event final (field 0.97 first-goal-assist, 0.87
+late-goal, 0.82 10+ corners — all No except corners... corners settled YES
+and we lost -45.7 there at 0.30 vs field 0.82, the match's worst row).
+Season record closed. README updated with final numbers.

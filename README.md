@@ -36,9 +36,9 @@ whole design:
 | Strategy | Season relative points | Approx. finish |
 |---|---|---|
 | Average entrant | ~0 (by construction) | ~2,000th |
-| **This system** | **+2,982** | **104th** |
-| Crowd-consensus clone (counterfactual) | +3,549 | top ~50 |
-| Winner | +5,186 | 1st |
+| **This system** | **+3,419** | **104th** |
+| Crowd-consensus clone (counterfactual) | +3,924 | top ~50 |
+| Leader entering the final | +5,186 | 1st |
 
 Every number above comes from the repo's own settlement ledger
 (`parse_locked.py` over the contest's post-close emails, which disclose the
@@ -55,8 +55,9 @@ almost every individual in the crowd (the Brier of the average forecast is less
 than the average of the Briers), so the clone is an elite strategy — top ~1-2%
 here. Against it, this system's deviations netted **−566 points**: the sharp-book
 consensus machinery carried the rank, and the alpha layer on top, in aggregate,
-cost expected points. That number is recorded permanently in
-`data/improvement_log.md` and every nightly review, with per-family attribution.
+cost expected points (**−505** over the season). That number is recorded
+permanently in `data/improvement_log.md` and every nightly review, with
+per-family attribution.
 
 **Ledger 2 — rank.** A contest pays out on rank, and the payoff is convex. The
 clone's ceiling is wherever the consensus lands — it has essentially zero
@@ -93,7 +94,9 @@ Validated deviations from the crowd, each with its gate evidence inline in
   questions submitted as information-free placeholders — including "Will
   Argentina win the World Cup?" — repriced them from market data (draw-no-bet
   h2h, player-SOT ladder Skellam, tournament penalty base rates) and PATCHed
-  under deadline. Jumped 126th → 104th on the one match.
+  under deadline. The final graded **+62 vs the clone — the best single match
+  of the season** (five of the six fixes beat the field, +180 combined);
+  jumped 126th → 104th on the one match.
 
 And the honestly-documented losers: the quant layer's early-tournament
 mispricings (fouls/SOT races before the fixes above), a stale-cache bug that

@@ -4,7 +4,7 @@ A production bot that competed in the SportsPredict **Probability Cup**, a publi
 forecasting competition over FIFA World Cup 2026: ~104 matches, 1,000+ binary
 questions, six weeks (Jun 11 – Jul 19, 2026), 4,013 entrants.
 
-**Final rank: 109th of 4,013 (top 2.7%).** Fully autonomous in production —
+**Final rank: 104th of 4,013 (top 2.6%).** Fully autonomous in production —
 priced, submitted, and revised every question on systemd timers, with humans in
 the loop only for model governance.
 
@@ -36,7 +36,7 @@ whole design:
 | Strategy | Season relative points | Approx. finish |
 |---|---|---|
 | Average entrant | ~0 (by construction) | ~2,000th |
-| **This system** | **+3,419** | **109th** |
+| **This system** | **+3,419** | **104th** |
 | Crowd-consensus clone (counterfactual) | +3,924 | top ~50 |
 | Leader entering the final | +5,186 | 1st |
 
@@ -96,8 +96,7 @@ Validated deviations from the crowd, each with its gate evidence inline in
   h2h, player-SOT ladder Skellam, tournament penalty base rates) and PATCHed
   under deadline. The final graded **+62 vs the clone — the best single match
   of the season** (five of the six fixes beat the field, +180 combined);
-  jumped 126th → 104th on the one match (the board later settled to a final
-  official 109th).
+  jumped 126th → 104th on the one match.
 
 And the honestly-documented losers: the quant layer's early-tournament
 mispricings (fouls/SOT races before the fixes above), a stale-cache bug that

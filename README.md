@@ -8,6 +8,9 @@ questions, six weeks (Jun 11 – Jul 19, 2026), 4,013 entrants.
 priced, submitted, and revised every question on systemd timers, with humans in
 the loop only for model governance.
 
+Plain Python, no frameworks: ~7k lines plus ~1.8k of tests. scipy for the
+closed forms, SQLite for the market tape, systemd for scheduling.
+
 ---
 
 ## The game
@@ -189,16 +192,22 @@ The process is the part that transfers beyond this contest:
 | `data/reviews/`, `data/improvement_log.md` | the nightly record and decision log, unredacted |
 | `tests/` | pure-math + parsing suite |
 
+Short on time? `qprice.py` (the math), `forecast.py` (the consensus engine),
+and [The two ledgers](#the-two-ledgers) (the thinking) are the fastest way in.
+
 ## Running it
 
-The contest is over, so the live endpoints are dead, but the whole pipeline
-runs offline against a database copy:
-
 ```bash
-.claude/skills/run-jump-probability-cup/smoke.sh   # offline smoke of all stages
-python -m pytest -q                                # math + parsing suite
-python parse_locked.py                             # the season ledger
+pip install -r requirements.txt
+python -m pytest -q   # 140 tests: devig math, closed-form pricers, question
+                      # classifiers, email/ledger parsers — no network, no DB
 ```
+
+The pipeline stages themselves (`forecast.py`, `derive.py`, `parse_locked.py`)
+run against the season's SQLite market tape and locked-email corpus, which
+aren't distributed — the tape is licensed odds-feed data and the corpus is a
+personal mailbox export. From a bare clone, the tests and the pure-math modules
+(`devig.py`, `qprice.py`) are the runnable surface; the rest is here to read.
 
 ---
 

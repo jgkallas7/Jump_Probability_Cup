@@ -179,9 +179,10 @@ rescue book-unpriced questions.
 ## Security note
 
 The self-improvement *agent* loop (`routines/improve.sh`, `wc-improve.timer`) is
-**deliberately disabled**: running a code-capable agent as the user would expose
-the trading credential in the sibling kalshi-tracker project (shared mount,
-un-blockable). The discovery half (`audit.py`) and the deterministic review
+**deliberately disabled**: running a code-capable agent as the user would give it
+reach into live-trading credentials belonging to an unrelated project on the same
+host, and filesystem permissions there cannot reliably wall them off.
+The discovery half (`audit.py`) and the deterministic review
 (`review_report.py`) are safe and stay on. Keep all Kalshi access in this repo
 read-only and unauthenticated.
 

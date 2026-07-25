@@ -51,9 +51,9 @@ charter's escalate list), implement nothing and just log it for human review."
   # SECURITY (security-review HIGH, 2026-06-16): NOT bypassPermissions. Scrub
   # secrets from the agent env, and allowlist tools to the minimum (no push, no
   # arbitrary network). NOTE residual risk: the agent runs python for validation,
-  # and python can read any user-readable file — so the trading credential on
-  # this host is NOT fully protected by an allowlist alone. True isolation needs
-  # a container / restricted user without the trading secret mounted (see
+  # and python can read any user-readable file — so credentials elsewhere on
+  # this host are NOT fully protected by an allowlist alone. True isolation needs
+  # a container / restricted user without those secrets mounted (see
   # IMPROVEMENT_CHARTER.md "isolation"). Until then keep this conservative.
   unset KALSHI_API_KEY KALSHI_API_SECRET ODDS_API_KEY SP_API_KEY
   export GIT_TERMINAL_PROMPT=0

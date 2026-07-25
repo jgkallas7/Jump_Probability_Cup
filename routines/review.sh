@@ -4,7 +4,7 @@
 # re-grades realized field P&L, runs the OOS gate, and writes a dated review with
 # a FLAG-VALIDATION verdict (APPROVE/HOLD per flag). It does NOT flip any flag —
 # a human reads data/reviews/<date>.md and decides (charter: weight changes are a
-# human decision; also keeps a code-capable LLM out of the loop for PEM safety).
+# human decision; also keeps a code-capable LLM out of the loop for credential safety).
 set -uo pipefail
 REPO="/mnt/c/Users/jgkal/OneDrive/Jump_Probability_Cup"
 PY="/home/jgkal/.wc_cup_venv/bin/python"

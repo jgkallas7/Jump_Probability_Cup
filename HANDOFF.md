@@ -108,10 +108,10 @@ contest question, scored **relative to the field** (NOT absolute Brier).
 - `routines/improve.sh` + `wc-improve.timer` — daily headless `claude -p` agent,
   autonomy = "auto-implement behind a flag + OOS-validate, HUMAN approves go-live"
   (writes `data/improvement_log.md`). **TIMER DISABLED**: running a code-capable
-  agent as the user exposes the Kalshi **trading credential** (`[redacted]`,
-  on a shared mount → a restricted user can't be blocked). Re-enable ONLY after
-  isolation (Docker mounting repo+DB but NOT kalshi-tracker is the one reliable
-  option in this WSL). Cost is NOT a factor (Max subscription covers claude -p).
+  agent as the user exposes live-trading credentials of an unrelated project on
+  the same host (mount permissions there can't wall them off). Re-enable ONLY
+  after real isolation (a container mounting this repo+DB and nothing else is
+  the one reliable option in this WSL). Cost is NOT a factor.
 
 ## 6. OPEN TASKS / NEXT STEPS
 - ~~#11 flag flips~~ DONE 2026-07-01 evening (all live, see refresh note).

@@ -10,8 +10,8 @@ close in the locked email).
 
 Read-only and UNAUTHENTICATED: Kalshi's /markets and /markets/{t}/orderbook are
 public, so no API key and NO trading credential are needed (or touched). Never
-trades. This is deliberate — keeping the trading credential off the bot's path removes
-it as an exfiltration target for the self-improvement agent.
+trades. This is deliberate — keeping any trading credential off the bot's path
+removes it as an exfiltration target for the self-improvement agent.
 
   python kalshi_wc.py "France" "Senegal" 2026-06-16
 """

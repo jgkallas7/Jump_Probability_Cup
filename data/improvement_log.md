@@ -1085,3 +1085,10 @@ the board in a low-event final (field 0.97 first-goal-assist, 0.87
 late-goal, 0.82 10+ corners — all No except corners... corners settled YES
 and we lost -45.7 there at 0.30 vs field 0.82, the match's worst row).
 Season record closed. README updated with final numbers.
+
+## 2026-07-25 — post-season final regrade (review_report.py)
+Season fully settled; realized edge vs consensus clone stable at -505 across a
+week of nightly regrades (Jul 20-25, byte-identical modulo ±1 pt settlement
+jitter). Final flag-validation gates + per-bucket edges in
+`data/reviews/2026-07-25.md`. All five production timers (sentinel, morning,
+review, apifootball, weekly) disabled — the contest is over.

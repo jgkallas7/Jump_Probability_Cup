@@ -2,10 +2,10 @@
 # Morning routine (daily 07:00 CT): settle yesterday, ingest new questions,
 # forecast + submit defaults for today's matches.
 set -uo pipefail
-REPO="/mnt/c/Users/jgkal/OneDrive/Jump_Probability_Cup"
-PY="/home/jgkal/.wc_cup_venv/bin/python"
-LOG="/home/jgkal/wc_logs/morning.log"
-mkdir -p /home/jgkal/wc_logs
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PY="${WC_PY:-$HOME/.wc_cup_venv/bin/python}"
+LOG="$HOME/wc_logs/morning.log"
+mkdir -p $HOME/wc_logs
 cd "$REPO"
 
 # WC_* feature flags — sourced from the single source of truth shared with
@@ -16,12 +16,12 @@ $PY team_rates.py refresh >/dev/null 2>&1 || echo "team_rates refresh failed (qm
 {
   echo "===== morning $(date -u +%FT%H:%M) ====="
   # surface any overnight failures FIRST
-  if [ -s /home/jgkal/wc_logs/FAILURES.log ]; then
+  if [ -s $HOME/wc_logs/FAILURES.log ]; then
     echo "!!! FAILURES SINCE LAST CHECK !!!"
-    tail -10 /home/jgkal/wc_logs/FAILURES.log
+    tail -10 $HOME/wc_logs/FAILURES.log
   fi
   # heartbeat: sentinel should have ~96 entries/day
-  SENT=$(grep -c "sentinel" /home/jgkal/wc_logs/sentinel.log 2>/dev/null || echo 0)
+  SENT=$(grep -c "sentinel" $HOME/wc_logs/sentinel.log 2>/dev/null || echo 0)
   echo "sentinel log lines to date: $SENT"
   $PY -c "import db, submit; print('reconcile:', submit.reconcile(db.init()), 'records')"
   $PY calibrate.py sync          # grade yesterday's settlements

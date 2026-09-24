@@ -1,6 +1,6 @@
 """Parse the "🔒 Your predictions are locked" emails -> field model + P&L.
 
-The contest API withholds the per-question field average Brier (RULES.md).
+The contest API withholds the per-question field average Brier (docs/RULES.md).
 The locked-predictions email sent at each kickoff DOES expose it, as a table:
 
     Question | You | Field | If Yes | If No | Swing

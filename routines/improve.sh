@@ -1,6 +1,6 @@
 #!/bin/bash
 # Daily self-improvement agent (autonomy: auto-implement, human approves go-live).
-# Runs AFTER morning.sh/settlement. Reads IMPROVEMENT_CHARTER.md + the fresh
+# Runs AFTER morning.sh/settlement. Reads docs/IMPROVEMENT_CHARTER.md + the fresh
 # opportunity backlog, implements ONE validated improvement behind a flag (OFF),
 # commits it to the auto/improvements branch (master untouched), and writes an
 # APPROVE/HOLD recommendation to data/improvement_log.md for the human.
@@ -14,11 +14,11 @@
 # Requires the `claude` CLI authenticated in this environment. Wire into the same
 # scheduler that runs morning.sh, ~1h later (after settlement grading).
 set -uo pipefail
-REPO="/mnt/c/Users/jgkal/OneDrive/Jump_Probability_Cup"
-WT="/home/jgkal/wc-improve-tree"      # dedicated git worktree — NEVER the live tree
-PY="/home/jgkal/.wc_cup_venv/bin/python"
-LOG="/home/jgkal/wc_logs/improve.log"
-export WC_DB_PATH="/home/jgkal/wc_cup.db"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WT="$HOME/wc-improve-tree"      # dedicated git worktree — NEVER the live tree
+PY="${WC_PY:-$HOME/.wc_cup_venv/bin/python}"
+LOG="$HOME/wc_logs/improve.log"
+export WC_DB_PATH="$HOME/wc_cup.db"
 
 {
   echo "===== improve $(date -u +%FT%H:%M) ====="
@@ -38,7 +38,7 @@ export WC_DB_PATH="/home/jgkal/wc_cup.db"
   $PY audit.py >/dev/null 2>&1 || echo "audit.py failed (agent still runs off last backlog)"
 
   PROMPT="You are the daily improvement loop for this World Cup forecasting bot.
-Read IMPROVEMENT_CHARTER.md and data/opportunities.md in this repo, then execute
+Read docs/IMPROVEMENT_CHARTER.md and data/opportunities.md in this repo, then execute
 EXACTLY ONE improvement following the charter to the letter. Autonomy level:
 auto-implement + validate, but you MUST NOT enable any flag (the human approves
 go-live). Implement behind a flag default-OFF, validate out-of-sample, ensure
@@ -54,7 +54,7 @@ charter's escalate list), implement nothing and just log it for human review."
   # and python can read any user-readable file — so credentials elsewhere on
   # this host are NOT fully protected by an allowlist alone. True isolation needs
   # a container / restricted user without those secrets mounted (see
-  # IMPROVEMENT_CHARTER.md "isolation"). Until then keep this conservative.
+  # docs/IMPROVEMENT_CHARTER.md "isolation"). Until then keep this conservative.
   unset KALSHI_API_KEY KALSHI_API_SECRET ODDS_API_KEY SP_API_KEY
   export GIT_TERMINAL_PROMPT=0
   claude -p "$PROMPT" --permission-mode acceptEdits \

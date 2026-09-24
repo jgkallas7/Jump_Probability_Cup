@@ -10,9 +10,10 @@ import os
 from pathlib import Path
 
 # wc_cup.db lives on ext4, never OneDrive (WAL corrupts there — tracker lesson).
-DB_PATH = Path(os.environ.get("WC_DB_PATH", "/home/jgkal/wc_cup.db"))
+DB_PATH = Path(os.environ.get("WC_DB_PATH", Path.home() / "wc_cup.db"))
 
-TRACKER_ENV = Path("/mnt/c/Users/jgkal/OneDrive/[redacted]")
+# Optional fallback: a sibling project's .env that also carries ODDS_API_KEY.
+TRACKER_ENV = Path(os.environ["WC_TRACKER_ENV"]) if os.environ.get("WC_TRACKER_ENV") else None
 
 # The Odds API
 ODDS_API_BASE = "https://api.the-odds-api.com/v4"
@@ -93,7 +94,7 @@ def odds_api_key() -> str:
         key = key_file.read_text().strip()
         if key:
             return key
-    if TRACKER_ENV.exists():
+    if TRACKER_ENV and TRACKER_ENV.exists():
         for line in TRACKER_ENV.read_text().splitlines():
             line = line.strip()
             if line.startswith("ODDS_API_KEY="):

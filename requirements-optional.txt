@@ -1,0 +1,5 @@
+# Optional extras — not needed for the test suite.
+-r requirements.txt
+mcp>=1.0           # local Odds-API MCP server (mcp/odds_api_server.py)
+soccerdata>=1.9    # FBref team/referee rate scrapes (team_rates.py, ref_rates.py);
+                   # pulls in browser-automation deps that need X11 headers on Linux

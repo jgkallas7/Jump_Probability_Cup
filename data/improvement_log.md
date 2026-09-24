@@ -11,7 +11,7 @@ Review a day's work:  `git diff master..auto/improvements`
 
 ## 2026-06-16 — bootstrap (human)
 Self-improvement loop installed: `audit.py` (discovery, runs in morning.sh),
-`IMPROVEMENT_CHARTER.md` (standing instructions), `routines/improve.sh` +
+`docs/IMPROVEMENT_CHARTER.md` (standing instructions), `routines/improve.sh` +
 `wc-improve.timer` (daily 08:00 agent). Flags currently live & pending forward
 validation: `WC_QMODEL=1`, `WC_KALSHI=1` (both enabled in morning.sh this turn).
 First agent run: 2026-06-17 08:00.
@@ -30,7 +30,7 @@ bucket to disable. PENDING: team-rate layer (per-team offsides/fouls/SOT) clean
 validation still needs matchday-2+ (teams with a 2nd game); it's additive-only.
 
 ## 2026-06-16 — Stage 1 (national-team form) + data-source research
-Research agent mapped free soccer data (see IMPROVEMENT_CHARTER.md "External data
+Research agent mapped free soccer data (see docs/IMPROVEMENT_CHARTER.md "External data
 sources"). Key: soccerdata already wraps Football-Data.co.uk + ClubElo (plain CSV);
 martj42/international_results gives clean intl results; API-Football is the one-stop
 for national-team per-fixture stats + referees (needs free key).
@@ -1009,7 +1009,7 @@ proxy drift noted in memory). Digest emails put KidTwist at 39th–43rd the same
 week — metric/entry ambiguity recorded, not resolved. Bronze-final multiplier
 resolved from re-fetched scoring docs: elimination 2× / final-only 3× — matches
 config.STAGE_MULTIPLIER (third: 2.0, final: 3.0), no code change needed; the
-Jul-18 locked email banner is the definitive confirmation. RULES.md updated
+Jul-18 locked email banner is the definitive confirmation. docs/RULES.md updated
 (row 7b + per-match Top Forecaster gift fact). Overall prizes (top-10) are
 unreachable at either rank reading with 35 Qs left; the live incentive is the
 per-match Top Forecaster gift (won once, Jul 13). Posture for the final = user

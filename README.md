@@ -1,5 +1,7 @@
 # Jump Probability Cup — an autonomous forecasting system for a live prediction contest
 
+[![tests](https://github.com/jgkallas7/Jump_Probability_Cup/actions/workflows/tests.yml/badge.svg)](https://github.com/jgkallas7/Jump_Probability_Cup/actions/workflows/tests.yml)
+
 A production bot that competed in the SportsPredict **Probability Cup**, a public
 forecasting competition over FIFA World Cup 2026: ~104 matches, 1,000+ binary
 questions, six weeks (Jun 11 – Jul 19, 2026), 4,013 entrants.
@@ -180,9 +182,10 @@ The process is the part that transfers beyond this contest:
 
 | Path | What it is |
 |---|---|
-| `SPEC.md` | architecture rationale |
-| `HANDOFF.md` | operational state, open tasks, dead ends |
-| `RULES.md` | resolved contest-API facts |
+| `docs/SPEC.md` | architecture rationale |
+| `docs/HANDOFF.md` | operational state, open tasks, dead ends |
+| `docs/RULES.md` | resolved contest-API facts |
+| `docs/ROADMAP.md`, `docs/IMPROVEMENT_CHARTER.md` | backlog and the standing rules for model changes |
 | `config.py` | book whitelist + weights, devig settings |
 | `devig.py`, `qprice.py` | pure math (power/multiplicative devig; Poisson/Skellam/bivariate closed forms) |
 | `forecast.py`, `derive.py`, `qmodel.py`, `team_rates.py` | pricing engines |
@@ -198,10 +201,14 @@ and [The two ledgers](#the-two-ledgers) (the thinking) are the fastest way in.
 ## Running it
 
 ```bash
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m pytest -q   # 140 tests: devig math, closed-form pricers, question
                       # classifiers, email/ledger parsers — no network, no DB
 ```
+
+`requirements-optional.txt` adds the FBref scraper and the MCP server, which only
+the live data-refresh jobs need.
 
 The pipeline stages themselves (`forecast.py`, `derive.py`, `parse_locked.py`)
 run against the season's SQLite market tape and locked-email corpus, which

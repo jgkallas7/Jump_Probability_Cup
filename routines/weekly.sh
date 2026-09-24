@@ -2,10 +2,10 @@
 # Sunday review (19:00 CT): calibration + book Brier + deviation P&L.
 # REPORT-ONLY — weight changes are a human decision (trading discipline).
 set -uo pipefail
-REPO="/mnt/c/Users/jgkal/OneDrive/Jump_Probability_Cup"
-PY="/home/jgkal/.wc_cup_venv/bin/python"
-LOG="/home/jgkal/wc_logs/weekly.log"
-mkdir -p /home/jgkal/wc_logs
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PY="${WC_PY:-$HOME/.wc_cup_venv/bin/python}"
+LOG="$HOME/wc_logs/weekly.log"
+mkdir -p $HOME/wc_logs
 cd "$REPO"
 
 {

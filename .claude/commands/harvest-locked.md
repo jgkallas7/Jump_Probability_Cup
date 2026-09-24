@@ -14,7 +14,7 @@ which isn't set — this command is the deliberate manual replacement).
 
 Lookback window: **$1** days (default 4 if empty).
 
-Paths: repo cwd; `PY=/home/jgkal/.wc_cup_venv/bin/python`; `WC_DB_PATH=/home/jgkal/wc_cup.db`.
+Paths: repo cwd; `PY=~/.wc_cup_venv/bin/python`; `WC_DB_PATH=~/wc_cup.db`.
 
 ## Steps
 
@@ -44,8 +44,8 @@ Paths: repo cwd; `PY=/home/jgkal/.wc_cup_venv/bin/python`; `WC_DB_PATH=/home/jgk
 
 5. **Settle + re-grade.** (DB env var required.)
    ```
-   WC_DB_PATH=/home/jgkal/wc_cup.db $PY calibrate.py sync
-   WC_DB_PATH=/home/jgkal/wc_cup.db $PY parse_locked.py --backfill
+   WC_DB_PATH=~/wc_cup.db $PY calibrate.py sync
+   WC_DB_PATH=~/wc_cup.db $PY parse_locked.py --backfill
    ```
 
 6. **Report vs the field — not vs the outcome.** From the `parse_locked` table,

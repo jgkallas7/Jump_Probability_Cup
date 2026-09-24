@@ -1,10 +1,10 @@
 #!/bin/bash
 # Pre-match sentinel wrapper (every 15 min via systemd timer).
 set -uo pipefail
-REPO="/mnt/c/Users/jgkal/OneDrive/Jump_Probability_Cup"
-PY="/home/jgkal/.wc_cup_venv/bin/python"
-LOG="/home/jgkal/wc_logs/sentinel.log"
-mkdir -p /home/jgkal/wc_logs
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PY="${WC_PY:-$HOME/.wc_cup_venv/bin/python}"
+LOG="$HOME/wc_logs/sentinel.log"
+mkdir -p $HOME/wc_logs
 cd "$REPO"
 # WC_* feature flags — MUST match morning.sh, else sentinel (the last writer
 # before close) re-prices flag-free and strips morning's flagged value. Shared

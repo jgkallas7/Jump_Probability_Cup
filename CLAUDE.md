@@ -12,9 +12,9 @@ questions no book prices), and POSTs integer 1–99 probabilities to the contest
 API. Production runs headless on systemd user timers; you drive it for
 inspection and changes.
 
-**Read these first, in order:** `HANDOFF.md` (current operational state, what's
-live, dead-ends, open tasks), then `SPEC.md` (architecture rationale), `RULES.md`
-(resolved contest-API facts), `IMPROVEMENT_CHARTER.md` (standing instructions for
+**Read these first, in order:** `docs/HANDOFF.md` (current operational state, what's
+live, dead-ends, open tasks), then `docs/SPEC.md` (architecture rationale), `docs/RULES.md`
+(resolved contest-API facts), `docs/IMPROVEMENT_CHARTER.md` (standing instructions for
 model changes). The auto-loaded `memory/MEMORY.md` indexes durable facts.
 
 ## The one mental model — scoring is RELATIVE to the field
@@ -41,7 +41,7 @@ relative points, and a "wrong-side" one can *win* them. Consequences:
   POSTs to the live leaderboard.** `sentinel.py` PATCHes real predictions.
   Never run these "to test."
 - `forecast.py` and `derive.py` **INSERT rows into whatever DB `WC_DB_PATH`
-  points at** — including the live `/home/jgkal/wc_cup.db`. Always run them
+  points at** — including the live `~/wc_cup.db`. Always run them
   against a *copy* when experimenting.
 - `snapshot.py pinnacle`, `fetch_schedule.py`, `ingest_questions.py`,
   `calibrate.py sync` spend **paid Odds-API credits** (a pool shared with the
@@ -59,8 +59,8 @@ POSTing client:
 To poke one stage by hand, copy the DB first:
 
 ```bash
-PY=/home/jgkal/.wc_cup_venv/bin/python
-TMP=$(mktemp -d); cp /home/jgkal/wc_cup.db "$TMP/wc_cup.db"; export WC_DB_PATH="$TMP/wc_cup.db"
+PY=~/.wc_cup_venv/bin/python
+TMP=$(mktemp -d); cp ~/wc_cup.db "$TMP/wc_cup.db"; export WC_DB_PATH="$TMP/wc_cup.db"
 $PY forecast.py --hours 720                 # consensus pricing (pure, no network)
 $PY submit.py submit --dry-run --hours 720  # submission sheet, NO POST
 $PY derive.py --dry-run --hours 720         # alpha engine, NO POST
@@ -73,23 +73,23 @@ branch returns.
 
 ## Environment & commands
 
-- **Always use the venv python** (deps are venv-only): `/home/jgkal/.wc_cup_venv/bin/python`.
+- **Always use the venv python** (deps are venv-only): `~/.wc_cup_venv/bin/python`.
   System `python3` will `ModuleNotFoundError` on `requests`/`curl_cffi`/`mcp`.
 - **Run from the repo root** — scripts use flat imports (`import db, config`) and
   `__file__`-relative paths (`sheet.py` writes `data/sheets/`).
-- `WC_DB_PATH` defaults to the **live** `/home/jgkal/wc_cup.db` (on ext4, never
+- `WC_DB_PATH` defaults to the **live** `~/wc_cup.db` (on ext4, never
   OneDrive — WAL corrupts on DrvFs). Override it to a copy when testing.
 - Keys resolve from env then a dotfile, never the repo: `ODDS_API_KEY` /
   `~/.odds_api_key`, `SP_API_KEY` / `~/.sp_api_key`, `~/.apifootball_key`.
 
 ```bash
-PY=/home/jgkal/.wc_cup_venv/bin/python
+PY=~/.wc_cup_venv/bin/python
 $PY -m pytest -q                          # full suite (pure-math + parsing tests)
 $PY -m pytest tests/test_forecast.py -q   # one file
 $PY -m pytest tests/test_qprice.py::test_name -q   # one test
-WC_DB_PATH=/home/jgkal/wc_cup.db $PY evaluate_qmodel.py --prior-only  # OOS gate (clean, no look-ahead)
-WC_DB_PATH=/home/jgkal/wc_cup.db $PY parse_locked.py   # realized us-vs-field P&L
-WC_DB_PATH=/home/jgkal/wc_cup.db $PY audit.py          # ranked opportunity backlog
+WC_DB_PATH=~/wc_cup.db $PY evaluate_qmodel.py --prior-only  # OOS gate (clean, no look-ahead)
+WC_DB_PATH=~/wc_cup.db $PY parse_locked.py   # realized us-vs-field P&L
+WC_DB_PATH=~/wc_cup.db $PY audit.py          # ranked opportunity backlog
 ```
 
 ## Pipeline architecture
@@ -143,7 +143,7 @@ Skellam, bivariate Poisson, first-goal) ← `qmodel.py` (routes each alpha
 question to a pricer using counted team rates + market goal-λ) ← `team_rates.py`
 (per-team counted rates, empirical-Bayes shrunk toward the tournament mean).
 `kalshi_wc.py` is an **unauthenticated, read-only** Kalshi orderbook reader (no
-trading credential ever touched — deliberate, see security note) providing a
+credential ever touched — deliberate, see security note) providing a
 live crowd-mid that `forecast.combine_kalshi` blends (book primary) or uses to
 rescue book-unpriced questions.
 
@@ -179,9 +179,9 @@ rescue book-unpriced questions.
 ## Security note
 
 The self-improvement *agent* loop (`routines/improve.sh`, `wc-improve.timer`) is
-**deliberately disabled**: running a code-capable agent as the user would give it
-reach into live-trading credentials belonging to an unrelated project on the same
-host, and filesystem permissions there cannot reliably wall them off.
+**deliberately disabled**: an unattended code-capable agent running as the user
+could read any user-readable file, including credentials outside this project.
+Re-enable only inside a container that mounts this repo and DB and nothing else.
 The discovery half (`audit.py`) and the deterministic review
 (`review_report.py`) are safe and stay on. Keep all Kalshi access in this repo
 read-only and unauthenticated.

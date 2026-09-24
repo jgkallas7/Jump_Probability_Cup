@@ -8,7 +8,7 @@ SETUP (one time): create a Gmail App Password (Google Account -> Security ->
 2-Step Verification -> App passwords) and save it, 0600, OUTSIDE the repo:
     printf '%s' 'xxxx xxxx xxxx xxxx' > ~/.gmail_app_password
     chmod 600 ~/.gmail_app_password
-Optional: echo your address to ~/.gmail_address (defaults to jgkallas7@gmail.com).
+Required: echo your address to ~/.gmail_address (or set GMAIL_ADDRESS).
 
 Without the credential this exits 0 with a notice, so review.sh still runs on
 the existing corpus. Idempotent: never overwrites an email already on disk.
@@ -29,7 +29,7 @@ from pathlib import Path
 EMAIL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "emails")
 PW_FILE = Path.home() / ".gmail_app_password"
 ADDR_FILE = Path.home() / ".gmail_address"
-DEFAULT_ADDR = "jgkallas7@gmail.com"
+DEFAULT_ADDR = os.environ.get("GMAIL_ADDRESS", "")
 IMAP_HOST = "imap.gmail.com"
 
 
@@ -68,6 +68,9 @@ def main(days: int) -> int:
               f"for one-time setup). Review runs on the existing corpus.")
         return 0
     addr = ADDR_FILE.read_text().strip() if ADDR_FILE.exists() else DEFAULT_ADDR
+    if not addr:
+        print(f"[harvest] no {ADDR_FILE} or GMAIL_ADDRESS — skipping email harvest.")
+        return 0
     pw = PW_FILE.read_text().strip()
     os.makedirs(EMAIL_DIR, exist_ok=True)
     existing = {p.name for p in Path(EMAIL_DIR).glob("*.html")}

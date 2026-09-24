@@ -31,7 +31,7 @@ import requests
 from mcp.server.fastmcp import FastMCP
 
 BASE = "https://api.the-odds-api.com/v4"
-DB_PATH = os.environ.get("WC_DB_PATH", "/home/jgkal/wc_cup.db")
+DB_PATH = os.environ.get("WC_DB_PATH", str(Path.home() / "wc_cup.db"))
 DEFAULT_SPORT = "soccer_fifa_world_cup"
 MAX_CALL_COST = int(os.environ.get("ODDS_MCP_MAX_COST", "30"))
 

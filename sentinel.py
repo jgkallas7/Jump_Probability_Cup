@@ -10,7 +10,9 @@ Credit guard: skips paid pulls if remaining credits < CREDIT_FLOOR
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import db
 import snapshot
@@ -18,8 +20,9 @@ import submit
 
 SENTINEL_WINDOW_MIN = 75
 CREDIT_FLOOR = 5000
-FAILURES_LOG = "/home/jgkal/wc_logs/FAILURES.log"
-NTFY_TOPIC = "wc-cup-kidtwist-a7x3"   # subscribe in the ntfy app on your phone
+FAILURES_LOG = str(Path.home() / "wc_logs" / "FAILURES.log")
+# ntfy topics are public-by-name, so the topic lives outside the repo.
+NTFY_TOPIC = os.environ.get("WC_NTFY_TOPIC", "")
 
 
 def _alert(msg: str) -> None:
@@ -32,6 +35,8 @@ def _alert(msg: str) -> None:
             f.write(line + "\n")
     except OSError:
         pass
+    if not NTFY_TOPIC:
+        return
     try:
         import requests
         requests.post(f"https://ntfy.sh/{NTFY_TOPIC}",

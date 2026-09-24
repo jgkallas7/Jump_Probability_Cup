@@ -27,12 +27,12 @@ cat data/reviews/$(date +%F).md
 ```
 
 If it's missing, the timer hasn't run or failed (check
-`/home/jgkal/wc_logs/review.log`). To regenerate by hand — safe: reads the DB
+`~/wc_logs/review.log`). To regenerate by hand — safe: reads the DB
 and email corpus, writes only `data/reviews/` + one pointer line to
 `data/improvement_log.md`, no POSTs, no credits:
 
 ```bash
-PY=/home/jgkal/.wc_cup_venv/bin/python
+PY=~/.wc_cup_venv/bin/python
 bash -c 'source routines/flags.sh && '"$PY"' review_report.py'
 ```
 
@@ -126,9 +126,9 @@ grepping the flag's name in the pricer source (`qmodel.py` / `derive.py` /
 There is no `sqlite3` CLI on this box — use the venv python, read-only URI:
 
 ```bash
-/home/jgkal/.wc_cup_venv/bin/python -c "
+~/.wc_cup_venv/bin/python -c "
 import sqlite3
-c = sqlite3.connect('file:/home/jgkal/wc_cup.db?mode=ro', uri=True)
+c = sqlite3.connect('file:~/wc_cup.db?mode=ro', uri=True)
 sql = '''SELECT qid, submitted_prob, deviation_reason FROM forecasts
   WHERE submitted_at IS NOT NULL AND deviation_reason LIKE '%<tag>%'
   ORDER BY submitted_at DESC LIMIT 5'''
@@ -153,7 +153,7 @@ flip takes effect on the next timer run on its own.
 - Do **not** hand-edit `data/opportunities.md` — audit.py regenerates it and
   will clobber your notes.
 - If the decision changes standing operational state (a LIVE feature turned
-  off, a watch closed out), reflect it in `HANDOFF.md`.
+  off, a watch closed out), reflect it in `docs/HANDOFF.md`.
 
 ## Step 6 — walk the watch list
 

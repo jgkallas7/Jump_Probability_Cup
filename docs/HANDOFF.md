@@ -108,8 +108,8 @@ contest question, scored **relative to the field** (NOT absolute Brier).
 - `routines/improve.sh` + `wc-improve.timer` — daily headless `claude -p` agent,
   autonomy = "auto-implement behind a flag + OOS-validate, HUMAN approves go-live"
   (writes `data/improvement_log.md`). **TIMER DISABLED**: running a code-capable
-  agent as the user exposes live-trading credentials of an unrelated project on
-  the same host (mount permissions there can't wall them off). Re-enable ONLY
+  agent as the user exposes every user-readable credential outside this project
+  (mount permissions can't wall them off). Re-enable ONLY
   after real isolation (a container mounting this repo+DB and nothing else is
   the one reliable option in this WSL). Cost is NOT a factor.
 
@@ -143,10 +143,10 @@ contest question, scored **relative to the field** (NOT absolute Brier).
 
 ## 7. QUICK COMMANDS
 ```
-WC_DB_PATH=/home/jgkal/wc_cup.db /home/jgkal/.wc_cup_venv/bin/python -m pytest -q
-WC_DB_PATH=/home/jgkal/wc_cup.db .../python evaluate_qmodel.py --prior-only   # OOS gate
-WC_DB_PATH=/home/jgkal/wc_cup.db .../python audit.py                          # opportunity backlog
-WC_DB_PATH=/home/jgkal/wc_cup.db .../python parse_locked.py                   # us vs field P&L
+WC_DB_PATH=~/wc_cup.db ~/.wc_cup_venv/bin/python -m pytest -q
+WC_DB_PATH=~/wc_cup.db .../python evaluate_qmodel.py --prior-only   # OOS gate
+WC_DB_PATH=~/wc_cup.db .../python audit.py                          # opportunity backlog
+WC_DB_PATH=~/wc_cup.db .../python parse_locked.py                   # us vs field P&L
 .../python apifootball_history.py aggregate                                   # ref/team historical rates (0 reqs)
-python = /home/jgkal/.wc_cup_venv/bin/python   ;   DB = /home/jgkal/wc_cup.db
+python = ~/.wc_cup_venv/bin/python   ;   DB = ~/wc_cup.db
 ```

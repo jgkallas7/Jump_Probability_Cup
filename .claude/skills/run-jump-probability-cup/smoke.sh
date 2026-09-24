@@ -15,15 +15,15 @@
 #   .claude/skills/run-jump-probability-cup/smoke.sh live     # +1 live API read
 #
 # Env overrides:
-#   WC_PY          python to use   (default: /home/jgkal/.wc_cup_venv/bin/python)
-#   WC_LIVE_DB     DB to copy from  (default: /home/jgkal/wc_cup.db)
+#   WC_PY          python to use   (default: ~/.wc_cup_venv/bin/python)
+#   WC_LIVE_DB     DB to copy from  (default: ~/wc_cup.db)
 #   WC_SMOKE_HOURS forecast window  (default: 720 — wide, to price everything)
 #   WC_SMOKE_LINES output cap/step  (default: 20)
 set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-PY="${WC_PY:-/home/jgkal/.wc_cup_venv/bin/python}"
-LIVE_DB="${WC_LIVE_DB:-/home/jgkal/wc_cup.db}"
+PY="${WC_PY:-$HOME/.wc_cup_venv/bin/python}"
+LIVE_DB="${WC_LIVE_DB:-$HOME/wc_cup.db}"
 HOURS="${WC_SMOKE_HOURS:-720}"
 LINES="${WC_SMOKE_LINES:-20}"
 MODE="${1:-smoke}"

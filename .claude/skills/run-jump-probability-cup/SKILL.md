@@ -25,16 +25,16 @@ All paths are relative to the repo root (`<unit>/`). The driver lives at
 No apt packages — pure Python 3.12 + SQLite (stdlib). It runs from a venv:
 
 ```bash
-# venv already exists here at /home/jgkal/.wc_cup_venv (deps verified importable).
+# venv already exists here at ~/.wc_cup_venv (deps verified importable).
 # To recreate on a clean machine:
-/usr/bin/python3 -m venv /home/jgkal/.wc_cup_venv
-/home/jgkal/.wc_cup_venv/bin/pip install -r requirements.txt
+/usr/bin/python3 -m venv ~/.wc_cup_venv
+~/.wc_cup_venv/bin/pip install -r requirements.txt
 ```
 
 Deps (`requirements.txt`): `requests`, `curl_cffi`, `mcp`, `pytest`.
 
 Environment the scripts read (`config.py`, `sp_client.py`):
-- `WC_DB_PATH` — DB location; **defaults to `/home/jgkal/wc_cup.db`** (the live
+- `WC_DB_PATH` — DB location; **defaults to `~/wc_cup.db`** (the live
   DB; lives on ext4, never OneDrive — WAL corrupts there). The driver overrides
   this to a throwaway copy.
 - `SP_API_KEY` — SportsPredict bearer key (needed only for `live` mode / any
@@ -59,7 +59,7 @@ for today's matches (e.g. `Brazil vs Morocco  55  Will Brazil win the match?`),
 (`pinnacle 0.2293 …`), `16 passed` from pytest, and `ALL SMOKE STEPS PASSED`.
 `live` prints `1 events visible … Jump Trading Probability Cup`.
 
-How it stays safe: `smoke.sh` copies `/home/jgkal/wc_cup.db` to a tmpdir and
+How it stays safe: `smoke.sh` copies `~/wc_cup.db` to a tmpdir and
 exports `WC_DB_PATH` at it, so every write lands on the copy; and it only calls
 `--dry-run` / read-only paths, which never construct a network client that POSTs.
 The tmpdir is removed on exit.
@@ -74,8 +74,8 @@ To inspect a single stage by hand, **first copy the DB** (forecast/derive write
 rows), point `WC_DB_PATH` at the copy, and use the venv python:
 
 ```bash
-PY=/home/jgkal/.wc_cup_venv/bin/python
-TMP=$(mktemp -d); cp /home/jgkal/wc_cup.db "$TMP/wc_cup.db"; export WC_DB_PATH="$TMP/wc_cup.db"
+PY=~/.wc_cup_venv/bin/python
+TMP=$(mktemp -d); cp ~/wc_cup.db "$TMP/wc_cup.db"; export WC_DB_PATH="$TMP/wc_cup.db"
 $PY forecast.py --hours 720                 # consensus pricing (pure, no network)
 $PY submit.py submit --dry-run --hours 720  # submission sheet, NO POST
 $PY derive.py --dry-run --hours 720         # alpha engine, NO POST
@@ -107,7 +107,7 @@ MCP server (launched by Claude Code via `.mcp.json`, stdio).
 ## Test
 
 ```bash
-/home/jgkal/.wc_cup_venv/bin/python -m pytest -q   # 16 passed in <1s
+~/.wc_cup_venv/bin/python -m pytest -q   # 16 passed in <1s
 ```
 
 ## Gotchas
@@ -138,7 +138,7 @@ MCP server (launched by Claude Code via `.mcp.json`, stdio).
 - `no such table: meta` / `no sp_lobby_id in meta` → you ran a data step against a
   `db.py`-only DB. Copy the live DB to `WC_DB_PATH` (or run `ingest_questions.py`).
 - `ModuleNotFoundError: requests/curl_cffi/mcp` → you used system `python3`. Use
-  `/home/jgkal/.wc_cup_venv/bin/python` (or set `WC_PY`).
+  `~/.wc_cup_venv/bin/python` (or set `WC_PY`).
 - `SportsPredict key missing: set SP_API_KEY` → only `live` mode / real submits
   need it; export `SP_API_KEY` or write `~/.sp_api_key`.
 - `ODDS_API_KEY not found …` → only the network scripts need it; the smoke

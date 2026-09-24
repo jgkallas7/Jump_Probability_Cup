@@ -6,10 +6,10 @@
 # a human reads data/reviews/<date>.md and decides (charter: weight changes are a
 # human decision; also keeps a code-capable LLM out of the loop for credential safety).
 set -uo pipefail
-REPO="/mnt/c/Users/jgkal/OneDrive/Jump_Probability_Cup"
-PY="/home/jgkal/.wc_cup_venv/bin/python"
-LOG="/home/jgkal/wc_logs/review.log"
-mkdir -p /home/jgkal/wc_logs
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PY="${WC_PY:-$HOME/.wc_cup_venv/bin/python}"
+LOG="$HOME/wc_logs/review.log"
+mkdir -p $HOME/wc_logs
 cd "$REPO"
 # source the live flags so the review's gate lines label LIVE vs candidate
 # truthfully (found 2026-07-01: a flag-free review rendered the live

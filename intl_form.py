@@ -13,7 +13,7 @@ Builds opponent-adjusted, recency-weighted Poisson ratings:
 These goal-rate lambdas are an INDEPENDENT estimate to blend with / sanity-check
 the market lambdas (derive.match_lambdas) and to rescue thin-market matches.
 Scores only — informs goals/totals/BTTS/first-goal/result, NOT offsides/fouls
-(those need API-Football per-fixture stats; see IMPROVEMENT_CHARTER.md).
+(those need API-Football per-fixture stats; see docs/IMPROVEMENT_CHARTER.md).
 
 Usage:
   python intl_form.py refresh   # download + cache results.csv

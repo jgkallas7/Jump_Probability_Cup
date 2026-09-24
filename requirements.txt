@@ -1,12 +1,6 @@
-# Core pipeline
+# Core pipeline + test suite (everything `pytest` needs)
 requests>=2.31
 numpy>=1.26
 pandas>=2.0
 scipy>=1.11        # qprice.py closed forms (Poisson survival, Skellam, bivariate)
-
-# Optional
-mcp>=1.0           # local Odds-API MCP server (mcp/odds_api_server.py) only
-soccerdata>=1.9    # FBref team/referee rate scrapes (team_rates.py, ref_rates.py)
-
-# Dev
 pytest>=8.0

@@ -13,6 +13,9 @@ the loop only for model governance.
 Plain Python, no frameworks: ~7k lines plus ~1.8k of tests. scipy for the
 closed forms, SQLite for the market tape, systemd for scheduling.
 
+Post-contest design notes (state-tracking debt to fix before any reuse):
+[`KNOWN_ISSUES.md`](KNOWN_ISSUES.md).
+
 ---
 
 ## The game

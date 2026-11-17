@@ -55,7 +55,7 @@ Fetched 2026-06-10. Quotes are verbatim from the published docs.
   $1,000,000 sports-related portfolio."
 - **#2–5:** Apple iPad Pro. **#6–10:** $200 Ticketmaster gift card.
 - **Per-match "Top Forecaster" gift exists** (discovered 2026-07-13 via a
-  "YOU WON THE MATCH" email from jose.medina@sportspredict.com): the #1
+  "YOU WON THE MATCH" email from the contest organizers): the #1
   forecaster on a single match gets a gift. We won it once (Argentina vs
   Switzerland QF). Separate from the season leaderboard — winnable on any
   single match regardless of overall rank.
